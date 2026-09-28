@@ -1,7 +1,17 @@
 @import "tailwindcss";
 
+@theme {
+	--color-ink: #1f3a2c;
+	--color-cream: #f8f3e3;
+	--font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
 body {
 	min-height: 100dvh;
-	background: linear-gradient(180deg, #d9e8d6 0%, #eef2e4 100%);
-	color: #1f3a2c;
+	background: #e4ece0;
+	color: var(--color-ink);
+}
+
+.poster-bg {
+	background: linear-gradient(180deg, #d5e6d3 0%, #e7eedc 55%, #eef0e0 100%);
 }
