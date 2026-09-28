@@ -9,7 +9,7 @@ const app = new Hono();
 const api = new Hono();
 
 // Bump when search result shape or ranking changes to bypass stale cache.
-const SEARCH_CACHE_VERSION = 3;
+const SEARCH_CACHE_VERSION = 4;
 
 api.get("/health", (c) => c.json({ ok: true }));
 

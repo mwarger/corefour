@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import type { Game } from "../shared/types.ts";
+import type { SearchResult } from "../shared/types.ts";
 import { coverUrl } from "./covers.ts";
 
 interface GamePickerProps {
 	slotNumber: number;
-	onSelect: (game: Game) => void;
+	onSelect: (game: SearchResult) => void;
 	onClose: () => void;
 }
 
 export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 	const [query, setQuery] = useState("");
-	const [results, setResults] = useState<Game[]>([]);
+	const [results, setResults] = useState<SearchResult[]>([]);
 	const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -37,7 +37,7 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 					signal: controller.signal,
 				});
 				if (!res.ok) throw new Error(String(res.status));
-				setResults((await res.json()) as Game[]);
+				setResults((await res.json()) as SearchResult[]);
 				setStatus("idle");
 			} catch (err) {
 				if (!controller.signal.aborted) setStatus("error");
@@ -94,9 +94,9 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 									<span className="block truncate font-semibold text-ink">
 										{game.name}
 									</span>
-									{game.year && (
-										<span className="text-sm text-ink/60">{game.year}</span>
-									)}
+									<span className="block truncate text-sm text-ink/60">
+										{resultDetails(game)}
+									</span>
 								</span>
 							</button>
 						</li>
@@ -116,4 +116,13 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 			</div>
 		</div>
 	);
+}
+
+const MAX_PLATFORMS = 4;
+
+/** e.g. "1998 · Remake · N64, 3DS, Switch +2" */
+function resultDetails({ year, kind, platforms }: SearchResult): string {
+	const shown = platforms.slice(0, MAX_PLATFORMS).join(", ");
+	const more = platforms.length > MAX_PLATFORMS ? ` +${platforms.length - MAX_PLATFORMS}` : "";
+	return [year, kind, shown && shown + more].filter(Boolean).join(" · ");
 }

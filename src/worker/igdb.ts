@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import type { Game } from "../shared/types.ts";
+import type { SearchResult } from "../shared/types.ts";
 
 const TOKEN_KEY = "igdb:token";
 
@@ -33,9 +33,19 @@ interface IgdbGame {
 	first_release_date?: number;
 	cover?: { image_id: string };
 	total_rating_count?: number;
+	platforms?: { name: string; abbreviation?: string }[];
+	game_type?: number;
 }
 
-export async function searchGames(query: string): Promise<Game[]> {
+// IGDB game_type ids we search (0 = main game, which gets no label).
+const KIND_LABELS: Record<number, string> = {
+	8: "Remake",
+	9: "Remaster",
+	10: "Expanded",
+	11: "Port",
+};
+
+export async function searchGames(query: string): Promise<SearchResult[]> {
 	// IGDB's query language uses double quotes and semicolons as syntax.
 	const q = query.replace(/["\;]/g, " ").trim().slice(0, 80);
 	if (!q) return [];
@@ -46,7 +56,7 @@ export async function searchGames(query: string): Promise<Game[]> {
 			"Client-ID": env.IGDB_CLIENT_ID,
 			Authorization: `Bearer ${await getToken()}`,
 		},
-		body: `search "${q}"; fields name,first_release_date,cover.image_id,total_rating_count; where cover != null & version_parent = null & game_type = (0,8,9,10,11); limit 30;`,
+		body: `search "${q}"; fields name,first_release_date,cover.image_id,total_rating_count,platforms.name,platforms.abbreviation,game_type; where cover != null & version_parent = null & game_type = (0,8,9,10,11); limit 30;`,
 	});
 	if (res.status === 401) await env.KV.delete(TOKEN_KEY);
 	if (!res.ok) throw new Error(`IGDB search failed: ${res.status}`);
@@ -66,6 +76,8 @@ export async function searchGames(query: string): Promise<Game[]> {
 			? new Date(g.first_release_date * 1000).getUTCFullYear()
 			: undefined,
 		imageId: g.cover!.image_id,
+		platforms: (g.platforms ?? []).map((p) => p.abbreviation ?? p.name),
+		kind: g.game_type === undefined ? undefined : KIND_LABELS[g.game_type],
 	}));
 }
 

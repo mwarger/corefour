@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import type { Grid } from "../shared/types.ts";
+import { type Grid, toGame } from "../shared/types.ts";
 import { downloadPoster, posterFilename } from "./exportPng.ts";
 import { GamePicker } from "./GamePicker.tsx";
 import { Poster } from "./Poster.tsx";
@@ -77,7 +77,7 @@ function Editor() {
 					slotNumber={picking + 1}
 					onClose={closePicker}
 					onSelect={(game) => {
-						setSlot(picking, game);
+						setSlot(picking, toGame(game));
 						setPicking(null);
 					}}
 				/>
