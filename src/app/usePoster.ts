@@ -34,5 +34,12 @@ export function usePoster() {
 			slots: p.slots.map((s, i) => (i === index ? game : s)),
 		}));
 
-	return { poster, setPoster, setSlot };
+	const swapSlots = (a: number, b: number) =>
+		setPoster((p) => {
+			const slots = [...p.slots];
+			[slots[a], slots[b]] = [slots[b], slots[a]];
+			return { ...p, slots };
+		});
+
+	return { poster, setPoster, setSlot, swapSlots };
 }

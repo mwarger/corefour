@@ -11,7 +11,7 @@ export function App() {
 }
 
 function Editor() {
-	const { poster, setPoster, setSlot } = usePoster();
+	const { poster, setPoster, setSlot, swapSlots } = usePoster();
 	const [picking, setPicking] = useState<number | null>(null);
 	const [shareUrl, setShareUrl] = useState<string | null>(null);
 	const posterRef = useRef<HTMLDivElement>(null);
@@ -69,6 +69,7 @@ function Editor() {
 					onTitleChange: (field, value) => setPoster((p) => ({ ...p, [field]: value })),
 					onPick: setPicking,
 					onClear: (i) => setSlot(i, null),
+					onSwap: swapSlots,
 				}}
 			/>
 			{picking !== null && (
