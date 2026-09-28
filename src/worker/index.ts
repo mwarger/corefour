@@ -1,22 +1,28 @@
+import { env } from "cloudflare:workers";
 import { Hono } from "hono";
+import type { Grid } from "../shared/types.ts";
 import { loadGrid, parseGrid, saveGrid } from "./grids.ts";
 import { searchGames } from "./igdb.ts";
+import { renderOgImage } from "./og.tsx";
 
-const app = new Hono().basePath("/api");
+const app = new Hono();
+const api = new Hono();
 
 // Bump when search result shape or ranking changes to bypass stale cache.
 const SEARCH_CACHE_VERSION = 3;
 
-app.get("/health", (c) => c.json({ ok: true }));
+api.get("/health", (c) => c.json({ ok: true }));
 
 // Responses are cached per-colo with the Cache API so repeat searches
 // don't hit IGDB (and don't spend KV writes).
-app.get("/search", async (c) => {
+api.get("/search", async (c) => {
 	const q = (c.req.query("q") ?? "").trim().toLowerCase();
 	if (q.length < 2) return c.json([]);
 
 	const cache = await caches.open("search");
-	const cacheKey = new Request(`https://cache.my9/search/v${SEARCH_CACHE_VERSION}?q=${encodeURIComponent(q)}`);
+	const cacheKey = new Request(
+		`https://cache.my9/search/v${SEARCH_CACHE_VERSION}?q=${encodeURIComponent(q)}`,
+	);
 	const hit = await cache.match(cacheKey);
 	if (hit) return hit;
 
@@ -31,7 +37,7 @@ const IMAGE_SIZES = new Set(["cover_small", "cover_big", "cover_big_2x", "720p"]
 
 // Same-origin proxy for IGDB covers so the poster can be exported to PNG
 // without tainting the canvas.
-app.get("/img/:size/:imageId", async (c) => {
+api.get("/img/:size/:imageId", async (c) => {
 	const { size, imageId } = c.req.param();
 	if (!IMAGE_SIZES.has(size) || !/^[a-z0-9]+$/.test(imageId)) {
 		return c.notFound();
@@ -51,14 +57,14 @@ app.get("/img/:size/:imageId", async (c) => {
 	});
 });
 
-app.post("/grids", async (c) => {
+api.post("/grids", async (c) => {
 	const grid = parseGrid(await c.req.json().catch(() => null));
 	if (!grid) return c.json({ error: "Invalid poster" }, 400);
 	return c.json({ id: await saveGrid(grid) }, 201);
 });
 
 // Grids are immutable (content-addressed), so they can be cached forever.
-app.get("/grids/:id", async (c) => {
+api.get("/grids/:id", async (c) => {
 	const json = await loadGrid(c.req.param("id"));
 	if (!json) return c.json({ error: "Not found" }, 404);
 	return c.body(json, 200, {
@@ -67,9 +73,70 @@ app.get("/grids/:id", async (c) => {
 	});
 });
 
-app.onError((err, c) => {
+// Link-preview image. Rendering is relatively expensive, so cache the PNG.
+api.get("/og/:file", async (c) => {
+	const id = c.req.param("file").match(/^([0-9A-Za-z]{10})\.png$/)?.[1];
+	if (!id) return c.notFound();
+
+	const cache = await caches.open("og");
+	const hit = await cache.match(c.req.raw);
+	if (hit) return hit;
+
+	const json = await loadGrid(id);
+	if (!json) return c.notFound();
+	const res = await renderOgImage(
+		JSON.parse(json) as Grid,
+		// Hono's ExecutionContext type lags behind workerd's.
+		c.executionCtx as ExecutionContext,
+	);
+	c.executionCtx.waitUntil(cache.put(c.req.raw, res.clone()));
+	return res;
+});
+
+api.onError((err, c) => {
 	console.error(err);
 	return c.json({ error: "Something went wrong" }, 500);
 });
+
+app.route("/api", api);
+
+const escapeHtml = (s: string) =>
+	s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+
+// Shared posters get the SPA shell plus Open Graph tags, so links unfurl
+// with a preview image in chat apps and social sites.
+app.get("/g/:id", async (c) => {
+	const id = c.req.param("id");
+	const [page, json] = await Promise.all([
+		env.ASSETS.fetch(new URL("/", c.req.url)),
+		loadGrid(id),
+	]);
+	if (!json) return page;
+
+	const grid = JSON.parse(json) as Grid;
+	const games = grid.slots.flatMap((g) => (g ? [g.name] : []));
+	const title = escapeHtml(grid.title);
+	const description = escapeHtml(games.join(" · "));
+	const image = escapeHtml(new URL(`/api/og/${id}.png`, c.req.url).href);
+	const url = escapeHtml(new URL(`/g/${id}`, c.req.url).href);
+	const meta = `
+		<meta name="description" content="${description}" />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="My 9" />
+		<meta property="og:title" content="${title}" />
+		<meta property="og:description" content="${description}" />
+		<meta property="og:url" content="${url}" />
+		<meta property="og:image" content="${image}" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta name="twitter:card" content="summary_large_image" />`;
+
+	return new HTMLRewriter()
+		.on("title", { element: (el) => void el.setInnerContent(grid.title) })
+		.on("head", { element: (el) => void el.append(meta, { html: true }) })
+		.transform(page);
+});
+
+app.notFound((c) => env.ASSETS.fetch(c.req.raw));
 
 export default app satisfies ExportedHandler;

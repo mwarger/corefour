@@ -8,9 +8,10 @@ export default defineConfig({
 		entrypoint,
 		assets: {
 			notFoundHandling: "single-page-application",
-			runWorkerFirst: ["/api/*"],
+			runWorkerFirst: ["/api/*", "/g/*"],
 		},
 		env: {
+			ASSETS: bindings.assets(),
 			// Share links (grid:{id}) and IGDB search/token cache.
 			KV: bindings.kv(),
 			// Twitch developer app credentials for the IGDB API.
