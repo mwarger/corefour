@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { cache, GoogleFont, ImageResponse } from "@cf-wasm/og/workerd";
 import type { Grid } from "../shared/types.ts";
 
@@ -23,7 +24,7 @@ async function coverDataUrl(imageId: string): Promise<string | null> {
 const titleSize = (title: string) => (title.length <= 16 ? 64 : title.length <= 30 ? 50 : 40);
 
 /** 1200×630 link-preview image: title on the left, the 3×3 covers on the right. */
-export async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Response> {
+async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Response> {
 	cache.setExecutionContext(ctx);
 	const covers = await Promise.all(
 		grid.slots.map((g) => (g ? coverDataUrl(g.imageId) : Promise.resolve(null))),
@@ -113,4 +114,26 @@ export async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<
 			headers: { "Cache-Control": "public, max-age=31536000, immutable" },
 		},
 	);
+}
+
+/** Bump when the preview design changes; also busts crawler image caches. */
+export const OG_VERSION = 2;
+
+const objectKey = (id: string) => `v${OG_VERSION}/${id}.png`;
+
+export const ogImagePath = (id: string) => `/api/og/${id}.png?v=${OG_VERSION}`;
+
+/**
+ * Rendering takes ~1s and a lot of CPU, which is too slow for crawlers that
+ * fetch the image with a short timeout. So previews are rendered once, when
+ * the poster is shared, and stored in R2.
+ */
+export async function ensureOgImage(id: string, grid: Grid, ctx: ExecutionContext) {
+	const key = objectKey(id);
+	const existing = await env.OG_IMAGES.get(key);
+	if (existing) return existing.arrayBuffer();
+
+	const png = await (await renderOgImage(grid, ctx)).arrayBuffer();
+	await env.OG_IMAGES.put(key, png, { httpMetadata: { contentType: "image/png" } });
+	return png;
 }

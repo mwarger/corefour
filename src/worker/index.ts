@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { Grid } from "../shared/types.ts";
 import { loadGrid, parseGrid, saveGrid } from "./grids.ts";
 import { searchGames } from "./igdb.ts";
-import { renderOgImage } from "./og.tsx";
+import { ensureOgImage, ogImagePath } from "./og.tsx";
 
 const app = new Hono();
 const api = new Hono();
@@ -60,7 +60,9 @@ api.get("/img/:size/:imageId", async (c) => {
 api.post("/grids", async (c) => {
 	const grid = parseGrid(await c.req.json().catch(() => null));
 	if (!grid) return c.json({ error: "Invalid poster" }, 400);
-	return c.json({ id: await saveGrid(grid) }, 201);
+	const id = await saveGrid(grid);
+	c.executionCtx.waitUntil(ensureOgImage(id, grid, c.executionCtx as ExecutionContext));
+	return c.json({ id }, 201);
 });
 
 // Grids are immutable (content-addressed), so they can be cached forever.
@@ -73,24 +75,23 @@ api.get("/grids/:id", async (c) => {
 	});
 });
 
-// Link-preview image. Rendering is relatively expensive, so cache the PNG.
+// Link-preview image, normally pre-rendered to R2 when the poster was shared.
 api.get("/og/:file", async (c) => {
 	const id = c.req.param("file").match(/^([0-9A-Za-z]{10})\.png$/)?.[1];
 	if (!id) return c.notFound();
 
-	const cache = await caches.open("og");
-	const hit = await cache.match(c.req.raw);
-	if (hit) return hit;
-
 	const json = await loadGrid(id);
 	if (!json) return c.notFound();
-	const res = await renderOgImage(
+	const png = await ensureOgImage(
+		id,
 		JSON.parse(json) as Grid,
 		// Hono's ExecutionContext type lags behind workerd's.
 		c.executionCtx as ExecutionContext,
 	);
-	c.executionCtx.waitUntil(cache.put(c.req.raw, res.clone()));
-	return res;
+	return c.body(png, 200, {
+		"Content-Type": "image/png",
+		"Cache-Control": "public, max-age=31536000, immutable",
+	});
 });
 
 api.onError((err, c) => {
@@ -117,7 +118,7 @@ app.get("/g/:id", async (c) => {
 	const games = grid.slots.flatMap((g) => (g ? [g.name] : []));
 	const title = escapeHtml(grid.title);
 	const description = escapeHtml(games.join(" · "));
-	const image = escapeHtml(new URL(`/api/og/${id}.png`, c.req.url).href);
+	const image = escapeHtml(new URL(ogImagePath(id), c.req.url).href);
 	const url = escapeHtml(new URL(`/g/${id}`, c.req.url).href);
 	const alt = escapeHtml(`${grid.title}: ${games.join(", ")}`);
 	const meta = `
