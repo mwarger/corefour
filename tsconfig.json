@@ -19,7 +19,9 @@
 	},
 	"include": [
 		"src",
+		"test",
 		"cloudflare.config.ts",
-		".cloudflare/types"
+		".cloudflare/types",
+		"vitest.config.ts"
 	]
 }

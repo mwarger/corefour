@@ -1,37 +1,56 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { type Grid, toGame } from "../shared/types.ts";
+import { migrateDraft } from "../shared/draft.ts";
+import { type Grid, type ShareRequest, toItem } from "../shared/types.ts";
 import { downloadPoster, posterFilename } from "./exportPng.ts";
-import { GamePicker } from "./GamePicker.tsx";
+import { ItemPicker } from "./ItemPicker.tsx";
 import { Poster } from "./Poster.tsx";
-import { emptyPoster, STORAGE_KEY, usePoster } from "./usePoster.ts";
+import { getTurnstileToken } from "./turnstile.ts";
+import { saveDraft, usePoster } from "./usePoster.ts";
 
 export function App() {
 	const shareId = location.pathname.match(/^\/g\/([0-9A-Za-z]{10})\/?$/)?.[1];
 	return shareId ? <SharedView id={shareId} /> : <Editor />;
 }
 
+type Notice = { kind: "shared"; url: string } | { kind: "error"; text: string };
+
+async function shareGrid(grid: Grid): Promise<string> {
+	const body: ShareRequest = {
+		category: grid.category,
+		subtitle: grid.subtitle,
+		theme: grid.theme,
+		items: grid.items.map((i) => i && { source: i.source, id: i.id }),
+		turnstileToken: await getTurnstileToken(),
+	};
+	const res = await fetch("/api/grids", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+	});
+	const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+	if (!res.ok || !data.id) throw new Error(data.error ?? "Sharing failed. Please try again.");
+	return `${location.origin}/g/${data.id}`;
+}
+
 function Editor() {
-	const { poster, setPoster, setSlot, swapSlots } = usePoster();
+	const { poster, setItem, swapItems, setSubtitle, reset } = usePoster();
 	const [picking, setPicking] = useState<number | null>(null);
-	const [shareUrl, setShareUrl] = useState<string | null>(null);
+	const [notice, setNotice] = useState<Notice | null>(null);
 	const posterRef = useRef<HTMLDivElement>(null);
 	const closePicker = useCallback(() => setPicking(null), []);
-	const filled = poster.slots.filter(Boolean).length;
+	const filled = poster.items.filter(Boolean).length;
 
 	// Any edit invalidates the last share link.
-	useEffect(() => setShareUrl(null), [poster]);
+	useEffect(() => setNotice(null), [poster]);
 
 	const share = async () => {
-		const res = await fetch("/api/grids", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(poster),
-		});
-		if (!res.ok) throw new Error(`Share failed: ${res.status}`);
-		const { id } = (await res.json()) as { id: string };
-		const url = `${location.origin}/g/${id}`;
-		setShareUrl(url);
-		await navigator.clipboard.writeText(url).catch(() => {});
+		try {
+			const url = await shareGrid(poster);
+			setNotice({ kind: "shared", url });
+			await navigator.clipboard.writeText(url).catch(() => {});
+		} catch (err) {
+			setNotice({ kind: "error", text: (err as Error).message });
+		}
 	};
 
 	return (
@@ -39,10 +58,10 @@ function Editor() {
 			toolbar={
 				<>
 					<span className="mr-auto font-semibold">{filled} / 9 picked</span>
-					<ActionButton onClick={() => setPoster(emptyPoster())}>Start over</ActionButton>
+					<ActionButton onClick={reset}>Start over</ActionButton>
 					<ActionButton
 						disabled={filled === 0}
-						onClick={() => downloadPoster(posterRef.current!, posterFilename(poster.title))}
+						onClick={() => downloadPoster(posterRef.current!, posterFilename(poster))}
 					>
 						Download PNG
 					</ActionButton>
@@ -52,32 +71,35 @@ function Editor() {
 				</>
 			}
 			notice={
-				shareUrl && (
+				notice?.kind === "shared" ? (
 					<>
 						Link copied:{" "}
-						<a href={shareUrl} className="font-semibold underline break-all">
-							{shareUrl}
+						<a href={notice.url} className="font-semibold underline break-all">
+							{notice.url}
 						</a>
 					</>
-				)
+				) : notice?.kind === "error" ? (
+					<span className="text-red-800">{notice.text}</span>
+				) : null
 			}
 		>
 			<Poster
 				ref={posterRef}
 				poster={poster}
 				edit={{
-					onTitleChange: (field, value) => setPoster((p) => ({ ...p, [field]: value })),
+					onSubtitleChange: setSubtitle,
 					onPick: setPicking,
-					onClear: (i) => setSlot(i, null),
-					onSwap: swapSlots,
+					onClear: (i) => setItem(i, null),
+					onSwap: swapItems,
 				}}
 			/>
 			{picking !== null && (
-				<GamePicker
+				<ItemPicker
+					category={poster.category}
 					slotNumber={picking + 1}
 					onClose={closePicker}
-					onSelect={(game) => {
-						setSlot(picking, toGame(game));
+					onSelect={(result) => {
+						setItem(picking, toItem(result));
 						setPicking(null);
 					}}
 				/>
@@ -92,8 +114,9 @@ function SharedView({ id }: { id: string }) {
 
 	useEffect(() => {
 		fetch(`/api/grids/${id}`)
-			.then((r) => (r.ok ? (r.json() as Promise<Grid>) : null))
-			.then((g) => setGrid(g ?? "missing"))
+			.then((r) => (r.ok ? r.json() : null))
+			// Browsers may hold pre-v2 grids in cache (responses are immutable).
+			.then((g) => setGrid(g ? migrateDraft(g) : "missing"))
 			.catch(() => setGrid("missing"));
 	}, [id]);
 
@@ -112,9 +135,7 @@ function SharedView({ id }: { id: string }) {
 	if (!grid) return <Layout />;
 
 	const remix = () => {
-		try {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(grid));
-		} catch {}
+		saveDraft(grid);
 		location.href = "/";
 	};
 
@@ -128,7 +149,7 @@ function SharedView({ id }: { id: string }) {
 					<ActionButton onClick={remix}>Remix</ActionButton>
 					<ActionButton
 						primary
-						onClick={() => downloadPoster(posterRef.current!, posterFilename(grid.title))}
+						onClick={() => downloadPoster(posterRef.current!, posterFilename(grid))}
 					>
 						Download PNG
 					</ActionButton>

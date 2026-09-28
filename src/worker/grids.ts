@@ -1,61 +1,47 @@
 import { env } from "cloudflare:workers";
-import { type Game, type Grid, LIMITS } from "../shared/types.ts";
+import { migrateDraft } from "../shared/draft.ts";
+import type { Grid, ShareRequest } from "../shared/types.ts";
+import { GRID_ID_PATTERN, gridId } from "./ids.ts";
+import { SOURCES } from "./sources/index.ts";
 
-const isStr = (v: unknown, max: number): v is string =>
-	typeof v === "string" && v.length <= max;
+/** Thrown when an item reference doesn't resolve in its source database. */
+export class UnknownItemError extends Error {}
 
-function parseGame(v: unknown): Game | null | undefined {
-	if (v === null) return null;
-	if (typeof v !== "object") return undefined;
-	const g = v as Record<string, unknown>;
-	if (
-		!Number.isSafeInteger(g.id) ||
-		!isStr(g.name, LIMITS.name) ||
-		typeof g.imageId !== "string" ||
-		!/^[a-z0-9]{1,32}$/.test(g.imageId) ||
-		(g.year !== undefined && !Number.isSafeInteger(g.year))
-	) {
-		return undefined;
-	}
-	return {
-		id: g.id as number,
-		name: g.name,
-		imageId: g.imageId,
-		...(g.year !== undefined && { year: g.year as number }),
-	};
-}
+/** Thrown when KV's daily write quota is exhausted. */
+export class ShareBusyError extends Error {}
 
-/** Validates untrusted input and rebuilds it with only known fields. */
-export function parseGrid(v: unknown): Grid | null {
-	if (typeof v !== "object" || v === null) return null;
-	const g = v as Record<string, unknown>;
-	if (!isStr(g.title, LIMITS.title) || !isStr(g.subtitle, LIMITS.subtitle)) return null;
-	if (!Array.isArray(g.slots) || g.slots.length !== 9) return null;
-	const slots = g.slots.map(parseGame);
-	if (slots.includes(undefined) || slots.every((s) => s === null)) return null;
-	return { title: g.title, subtitle: g.subtitle, slots: slots as (Game | null)[] };
-}
-
-const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-// Content-addressed IDs: sharing the same poster twice returns the same link
-// and skips the KV write (free tier allows 1k writes/day).
-async function gridId(json: string): Promise<string> {
-	const hash = new Uint8Array(
-		await crypto.subtle.digest("SHA-256", new TextEncoder().encode(json)),
-	);
-	return Array.from(hash.slice(0, 10), (b) => ALPHABET[b % 62]).join("");
+/** Builds the stored grid from references, taking names and images from the source. */
+export async function resolveGrid(req: ShareRequest): Promise<Grid> {
+	const ids = req.items.flatMap((i) => (i ? [i.id] : []));
+	const found = await SOURCES.igdb.lookup([...new Set(ids)]);
+	const items = req.items.map((ref) => {
+		if (!ref) return null;
+		const item = found.get(ref.id);
+		if (!item) throw new UnknownItemError(`Unknown ${ref.source} item ${ref.id}`);
+		return item;
+	});
+	return { v: 2, category: req.category, subtitle: req.subtitle, theme: req.theme, items };
 }
 
 export async function saveGrid(grid: Grid): Promise<string> {
 	const json = JSON.stringify(grid);
 	const id = await gridId(json);
 	const key = `grid:${id}`;
-	if ((await env.KV.get(key)) === null) await env.KV.put(key, json);
+	if ((await env.KV.get(key)) === null) {
+		try {
+			await env.KV.put(key, json);
+		} catch (err) {
+			if (err instanceof Error && /limit/i.test(err.message)) throw new ShareBusyError();
+			throw err;
+		}
+	}
 	return id;
 }
 
-export async function loadGrid(id: string): Promise<string | null> {
-	if (!/^[0-9A-Za-z]{10}$/.test(id)) return null;
-	return env.KV.get(`grid:${id}`, { cacheTtl: 86_400 });
+export async function loadGrid(id: string): Promise<Grid | null> {
+	if (!GRID_ID_PATTERN.test(id)) return null;
+	const stored = await env.KV.get(`grid:${id}`, { type: "json", cacheTtl: 86_400 });
+	// Pre-v2 grids were rewritten in place, but edge caches may still serve
+	// the old shape for a while, so normalize on read.
+	return stored === null ? null : migrateDraft(stored);
 }

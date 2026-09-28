@@ -1,2 +1,4 @@
 IGDB_CLIENT_ID=
 IGDB_CLIENT_SECRET=
+# Cloudflare test secret that always passes; use the real one in production.
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA

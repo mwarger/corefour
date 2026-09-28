@@ -1,4 +1,6 @@
 import { domToPng } from "modern-screenshot";
+import { CATEGORIES } from "../shared/catalog.ts";
+import type { Grid } from "../shared/types.ts";
 
 export const EXPORT_WIDTH = 1080;
 
@@ -15,5 +17,5 @@ export async function downloadPoster(el: HTMLElement, filename: string) {
 	a.click();
 }
 
-export const posterFilename = (title: string) =>
-	`${title.trim().replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "my-9"}.png`;
+export const posterFilename = (grid: Grid) =>
+	`${CATEGORIES[grid.category].title.replace(/\s+/g, "-").toLowerCase()}.png`;

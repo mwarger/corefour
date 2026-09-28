@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { CATEGORIES, type CategoryId } from "../shared/catalog.ts";
 import type { SearchResult } from "../shared/types.ts";
 import { coverUrl } from "./covers.ts";
 
-interface GamePickerProps {
+interface ItemPickerProps {
+	category: CategoryId;
 	slotNumber: number;
-	onSelect: (game: SearchResult) => void;
+	onSelect: (item: SearchResult) => void;
 	onClose: () => void;
 }
 
-export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
+export function ItemPicker({ category, slotNumber, onSelect, onClose }: ItemPickerProps) {
+	const { noun } = CATEGORIES[category];
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<SearchResult[]>([]);
 	const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -33,7 +36,7 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 		const timer = setTimeout(async () => {
 			setStatus("loading");
 			try {
-				const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
+				const res = await fetch(`/api/search?category=${category}&q=${encodeURIComponent(q)}`, {
 					signal: controller.signal,
 				});
 				if (!res.ok) throw new Error(String(res.status));
@@ -47,7 +50,7 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 			clearTimeout(timer);
 			controller.abort();
 		};
-	}, [query]);
+	}, [query, category]);
 
 	return (
 		<div
@@ -57,7 +60,7 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 			<div
 				role="dialog"
 				aria-modal="true"
-				aria-label={`Choose game #${slotNumber}`}
+				aria-label={`Choose ${noun} #${slotNumber}`}
 				className="flex max-h-[75vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-cream shadow-2xl"
 				onClick={(e) => e.stopPropagation()}
 			>
@@ -72,30 +75,30 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 						ref={inputRef}
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						placeholder={`Search for game #${slotNumber}…`}
+						placeholder={`Search for ${noun} #${slotNumber}…`}
 						className="w-full rounded-lg bg-white px-4 py-3 text-base text-ink outline-none ring-ink/20 focus:ring-2"
 					/>
 				</form>
 				<ul className="overflow-y-auto p-2">
-					{results.map((game) => (
-						<li key={game.id}>
+					{results.map((item) => (
+						<li key={item.id}>
 							<button
 								type="button"
-								onClick={() => onSelect(game)}
+								onClick={() => onSelect(item)}
 								className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left hover:bg-ink/5 focus:bg-ink/5 focus:outline-none"
 							>
 								<img
-									src={coverUrl(game.imageId, "cover_small")}
+									src={coverUrl(item, "thumb")}
 									alt=""
 									loading="lazy"
 									className="h-16 w-12 shrink-0 rounded object-cover shadow"
 								/>
 								<span className="min-w-0">
 									<span className="block truncate font-semibold text-ink">
-										{game.name}
+										{item.name}
 									</span>
 									<span className="block truncate text-sm text-ink/60">
-										{resultDetails(game)}
+										{resultDetails(item)}
 									</span>
 								</span>
 							</button>
@@ -110,7 +113,7 @@ export function GamePicker({ slotNumber, onSelect, onClose }: GamePickerProps) {
 						</li>
 					)}
 					{status === "idle" && query.trim().length >= 2 && results.length === 0 && (
-						<li className="p-4 text-center text-ink/60">No games found.</li>
+						<li className="p-4 text-center text-ink/60">Nothing found.</li>
 					)}
 				</ul>
 			</div>

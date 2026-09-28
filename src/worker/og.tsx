@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { cache, GoogleFont, ImageResponse } from "@cf-wasm/og/workerd";
-import type { Grid } from "../shared/types.ts";
+import { CATEGORIES, subtitleText } from "../shared/catalog.ts";
+import type { Grid, Item } from "../shared/types.ts";
+import { SOURCES } from "./sources/index.ts";
 
 const INK = "#1f3a2c";
 const CREAM = "#f8f3e3";
@@ -8,10 +10,10 @@ const TILE_W = 132;
 const TILE_H = 185;
 const GAP = 12;
 
-async function coverDataUrl(imageId: string): Promise<string | null> {
-	const res = await fetch(`https://images.igdb.com/igdb/image/upload/t_cover_big/${imageId}.jpg`, {
-		cf: { cacheEverything: true, cacheTtl: 31_536_000 },
-	});
+async function coverDataUrl(item: Item): Promise<string | null> {
+	const url = SOURCES[item.source].imageUrl("og", item.image);
+	if (!url) return null;
+	const res = await fetch(url, { cf: { cacheEverything: true, cacheTtl: 31_536_000 } });
 	if (!res.ok) return null;
 	const bytes = new Uint8Array(await res.arrayBuffer());
 	let binary = "";
@@ -21,14 +23,14 @@ async function coverDataUrl(imageId: string): Promise<string | null> {
 	return `data:image/jpeg;base64,${btoa(binary)}`;
 }
 
-const titleSize = (title: string) => (title.length <= 16 ? 64 : title.length <= 30 ? 50 : 40);
-
 /** 1200×630 link-preview image: title on the left, the 3×3 covers on the right. */
 async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Response> {
 	cache.setExecutionContext(ctx);
 	const covers = await Promise.all(
-		grid.slots.map((g) => (g ? coverDataUrl(g.imageId) : Promise.resolve(null))),
+		grid.items.map((item) => (item ? coverDataUrl(item) : Promise.resolve(null))),
 	);
+	const category = CATEGORIES[grid.category];
+	const subtitle = subtitleText(grid.category, grid.subtitle);
 
 	return ImageResponse.async(
 		<div
@@ -56,12 +58,8 @@ async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Respons
 						border: "1px solid rgba(0,0,0,0.1)",
 					}}
 				>
-					<div style={{ fontSize: titleSize(grid.title), fontWeight: 800, lineHeight: 1.1 }}>
-						{grid.title}
-					</div>
-					{grid.subtitle && (
-						<div style={{ fontSize: 26, fontWeight: 600, opacity: 0.7 }}>{grid.subtitle}</div>
-					)}
+					<div style={{ fontSize: 64, fontWeight: 800, lineHeight: 1.1 }}>{category.title}</div>
+					{subtitle && <div style={{ fontSize: 26, fontWeight: 600, opacity: 0.7 }}>{subtitle}</div>}
 				</div>
 				<div style={{ display: "flex" }}>
 					<div
@@ -73,7 +71,7 @@ async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Respons
 							fontWeight: 800,
 						}}
 					>
-						#My9Games
+						{category.hashtag}
 					</div>
 				</div>
 			</div>
@@ -117,7 +115,7 @@ async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Respons
 }
 
 /** Bump when the preview design changes; also busts crawler image caches. */
-export const OG_VERSION = 2;
+export const OG_VERSION = 3;
 
 const objectKey = (id: string) => `v${OG_VERSION}/${id}.png`;
 

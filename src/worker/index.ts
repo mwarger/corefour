@@ -1,52 +1,55 @@
 import { env } from "cloudflare:workers";
 import { Hono } from "hono";
-import type { Grid } from "../shared/types.ts";
-import { loadGrid, parseGrid, saveGrid } from "./grids.ts";
-import { searchGames } from "./igdb.ts";
+import { CATEGORIES, isCategoryId, subtitleText } from "../shared/catalog.ts";
+import { loadGrid, resolveGrid, saveGrid, ShareBusyError, UnknownItemError } from "./grids.ts";
 import { ensureOgImage, ogImagePath } from "./og.tsx";
+import { isImageSize, isSourceId, SOURCES } from "./sources/index.ts";
+import { verifyTurnstile } from "./turnstile.ts";
+import { parseShareRequest } from "./validate.ts";
 
 const app = new Hono();
 const api = new Hono();
 
 // Bump when search result shape or ranking changes to bypass stale cache.
-const SEARCH_CACHE_VERSION = 4;
+const SEARCH_CACHE_VERSION = 5;
+
+// Hono's ExecutionContext type lags behind workerd's.
+const ctxOf = (c: { executionCtx: unknown }) => c.executionCtx as ExecutionContext;
 
 api.get("/health", (c) => c.json({ ok: true }));
 
 // Responses are cached per-colo with the Cache API so repeat searches
-// don't hit IGDB (and don't spend KV writes).
+// don't hit the source API (and don't spend KV writes).
 api.get("/search", async (c) => {
+	const category = c.req.query("category") ?? "games";
+	if (!isCategoryId(category)) return c.json({ error: "Unknown category" }, 400);
 	const q = (c.req.query("q") ?? "").trim().toLowerCase();
 	if (q.length < 2) return c.json([]);
 
 	const cache = await caches.open("search");
 	const cacheKey = new Request(
-		`https://cache.my9/search/v${SEARCH_CACHE_VERSION}?q=${encodeURIComponent(q)}`,
+		`https://cache.my9/search/v${SEARCH_CACHE_VERSION}/${category}?q=${encodeURIComponent(q)}`,
 	);
 	const hit = await cache.match(cacheKey);
 	if (hit) return hit;
 
-	const res = Response.json(await searchGames(q), {
+	const results = await SOURCES[CATEGORIES[category].source].search(q);
+	const res = Response.json(results, {
 		headers: { "Cache-Control": "public, max-age=86400" },
 	});
 	c.executionCtx.waitUntil(cache.put(cacheKey, res.clone()));
 	return res;
 });
 
-const IMAGE_SIZES = new Set(["cover_small", "cover_big", "cover_big_2x", "720p"]);
+// Same-origin image proxy so the poster can be exported to PNG without
+// tainting the canvas. Only fetches from each source's own image host.
+api.get("/img/:source/:size/:key", async (c) => {
+	const { source, size, key } = c.req.param();
+	if (!isSourceId(source) || !isImageSize(size)) return c.notFound();
+	const url = SOURCES[source].imageUrl(size, key);
+	if (!url) return c.notFound();
 
-// Same-origin proxy for IGDB covers so the poster can be exported to PNG
-// without tainting the canvas.
-api.get("/img/:size/:imageId", async (c) => {
-	const { size, imageId } = c.req.param();
-	if (!IMAGE_SIZES.has(size) || !/^[a-z0-9]+$/.test(imageId)) {
-		return c.notFound();
-	}
-
-	const upstream = await fetch(
-		`https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg`,
-		{ cf: { cacheEverything: true, cacheTtl: 31_536_000 } },
-	);
+	const upstream = await fetch(url, { cf: { cacheEverything: true, cacheTtl: 31_536_000 } });
 	if (!upstream.ok) return c.notFound();
 
 	return new Response(upstream.body, {
@@ -58,21 +61,35 @@ api.get("/img/:size/:imageId", async (c) => {
 });
 
 api.post("/grids", async (c) => {
-	const grid = parseGrid(await c.req.json().catch(() => null));
-	if (!grid) return c.json({ error: "Invalid poster" }, 400);
-	const id = await saveGrid(grid);
-	c.executionCtx.waitUntil(ensureOgImage(id, grid, c.executionCtx as ExecutionContext));
-	return c.json({ id }, 201);
+	const req = parseShareRequest(await c.req.json().catch(() => null));
+	if (!req) return c.json({ error: "Invalid poster" }, 400);
+
+	const ip = c.req.header("CF-Connecting-IP");
+	const { success } = await env.SHARE_LIMITER.limit({ key: ip ?? "unknown" });
+	if (!success) return c.json({ error: "Too many shares. Try again in a minute." }, 429);
+	if (!(await verifyTurnstile(req.turnstileToken, ip))) {
+		return c.json({ error: "Couldn't verify you're human. Please try again." }, 403);
+	}
+
+	try {
+		const grid = await resolveGrid(req);
+		const id = await saveGrid(grid);
+		c.executionCtx.waitUntil(ensureOgImage(id, grid, ctxOf(c)));
+		return c.json({ id }, 201);
+	} catch (err) {
+		if (err instanceof UnknownItemError) return c.json({ error: "Invalid poster" }, 400);
+		if (err instanceof ShareBusyError) {
+			return c.json({ error: "Sharing is busy right now. Try again later." }, 503);
+		}
+		throw err;
+	}
 });
 
 // Grids are immutable (content-addressed), so they can be cached forever.
 api.get("/grids/:id", async (c) => {
-	const json = await loadGrid(c.req.param("id"));
-	if (!json) return c.json({ error: "Not found" }, 404);
-	return c.body(json, 200, {
-		"Content-Type": "application/json",
-		"Cache-Control": "public, max-age=31536000, immutable",
-	});
+	const grid = await loadGrid(c.req.param("id"));
+	if (!grid) return c.json({ error: "Not found" }, 404);
+	return c.json(grid, 200, { "Cache-Control": "public, max-age=31536000, immutable" });
 });
 
 // Link-preview image, normally pre-rendered to R2 when the poster was shared.
@@ -80,14 +97,9 @@ api.get("/og/:file", async (c) => {
 	const id = c.req.param("file").match(/^([0-9A-Za-z]{10})\.png$/)?.[1];
 	if (!id) return c.notFound();
 
-	const json = await loadGrid(id);
-	if (!json) return c.notFound();
-	const png = await ensureOgImage(
-		id,
-		JSON.parse(json) as Grid,
-		// Hono's ExecutionContext type lags behind workerd's.
-		c.executionCtx as ExecutionContext,
-	);
+	const grid = await loadGrid(id);
+	if (!grid) return c.notFound();
+	const png = await ensureOgImage(id, grid, ctxOf(c));
 	return c.body(png, 200, {
 		"Content-Type": "image/png",
 		"Cache-Control": "public, max-age=31536000, immutable",
@@ -108,19 +120,20 @@ const escapeHtml = (s: string) =>
 // with a preview image in chat apps and social sites.
 app.get("/g/:id", async (c) => {
 	const id = c.req.param("id");
-	const [page, json] = await Promise.all([
+	const [page, grid] = await Promise.all([
 		env.ASSETS.fetch(new URL("/", c.req.url)),
 		loadGrid(id),
 	]);
-	if (!json) return page;
+	if (!grid) return page;
 
-	const grid = JSON.parse(json) as Grid;
-	const games = grid.slots.flatMap((g) => (g ? [g.name] : []));
-	const title = escapeHtml(grid.title);
-	const description = escapeHtml(games.join(" · "));
+	const names = grid.items.flatMap((i) => (i ? [i.name] : []));
+	const heading = CATEGORIES[grid.category].title;
+	const subtitle = subtitleText(grid.category, grid.subtitle) ?? "";
+	const title = escapeHtml(heading);
+	const description = escapeHtml(names.join(" · "));
+	const alt = escapeHtml(`${heading}, ${subtitle}: ${names.join(", ")}`);
 	const image = escapeHtml(new URL(ogImagePath(id), c.req.url).href);
 	const url = escapeHtml(new URL(`/g/${id}`, c.req.url).href);
-	const alt = escapeHtml(`${grid.title}: ${games.join(", ")}`);
 	const meta = `
 		<meta name="description" content="${description}" />
 		<meta property="og:type" content="website" />
@@ -140,11 +153,18 @@ app.get("/g/:id", async (c) => {
 		<meta name="twitter:image:alt" content="${alt}" />`;
 
 	return new HTMLRewriter()
-		.on("title", { element: (el) => void el.setInnerContent(grid.title) })
+		.on("title", { element: (el) => void el.setInnerContent(heading) })
+		// Tags go first so crawlers that only read the first chunk see them.
 		.on("head", { element: (el) => void el.prepend(meta, { html: true }) })
 		.transform(page);
 });
 
-app.notFound((c) => env.ASSETS.fetch(c.req.raw));
+// Hono routes every notFound (including c.notFound() inside the api sub-app)
+// here: API paths get a JSON 404, everything else falls through to the SPA.
+app.notFound((c) =>
+	new URL(c.req.url).pathname.startsWith("/api/")
+		? c.json({ error: "Not found" }, 404)
+		: env.ASSETS.fetch(c.req.raw),
+);
 
 export default app satisfies ExportedHandler;
