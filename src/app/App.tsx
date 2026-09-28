@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { migrateDraft } from "../shared/draft.ts";
-import { type Grid, type ShareRequest, toItem } from "../shared/types.ts";
+import { normalizeGrid } from "../shared/draft.ts";
+import { GRID_SIZE, type Grid, type ShareRequest, toItem } from "../shared/types.ts";
 import { downloadPoster, posterFilename } from "./exportPng.ts";
 import { ItemPicker } from "./ItemPicker.tsx";
 import { Poster } from "./Poster.tsx";
@@ -57,7 +57,7 @@ function Editor() {
 		<Layout
 			toolbar={
 				<>
-					<span className="mr-auto font-semibold">{filled} / 9 picked</span>
+					<span className="mr-auto font-semibold">{filled} / {GRID_SIZE} picked</span>
 					<ActionButton onClick={reset}>Start over</ActionButton>
 					<ActionButton
 						disabled={filled === 0}
@@ -115,8 +115,7 @@ function SharedView({ id }: { id: string }) {
 	useEffect(() => {
 		fetch(`/api/grids/${id}`)
 			.then((r) => (r.ok ? r.json() : null))
-			// Browsers may hold pre-v2 grids in cache (responses are immutable).
-			.then((g) => setGrid(g ? migrateDraft(g) : "missing"))
+			.then((g) => setGrid(g ? normalizeGrid(g) : "missing"))
 			.catch(() => setGrid("missing"));
 	}, [id]);
 

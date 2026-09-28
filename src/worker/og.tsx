@@ -6,9 +6,9 @@ import { SOURCES } from "./sources/index.ts";
 
 const INK = "#1f3a2c";
 const CREAM = "#f8f3e3";
-const TILE_W = 132;
-const TILE_H = 185;
-const GAP = 12;
+const TILE_W = 190;
+const TILE_H = 266;
+const GAP = 16;
 
 async function coverDataUrl(item: Item): Promise<string | null> {
 	const url = SOURCES[item.source].imageUrl("og", item.image);
@@ -23,7 +23,7 @@ async function coverDataUrl(item: Item): Promise<string | null> {
 	return `data:image/jpeg;base64,${btoa(binary)}`;
 }
 
-/** 1200×630 link-preview image: title on the left, the 3×3 covers on the right. */
+/** 1200×630 link-preview image: title on the left, the 2×2 covers on the right. */
 async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Response> {
 	cache.setExecutionContext(ctx);
 	const covers = await Promise.all(
@@ -76,7 +76,7 @@ async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Respons
 				</div>
 			</div>
 
-			<div style={{ display: "flex", flexWrap: "wrap", width: TILE_W * 3 + GAP * 2, gap: GAP }}>
+			<div style={{ display: "flex", flexWrap: "wrap", width: TILE_W * 2 + GAP, gap: GAP }}>
 				{covers.map((src, i) => (
 					<div
 						key={i}
@@ -84,7 +84,7 @@ async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Respons
 							display: "flex",
 							width: TILE_W,
 							height: TILE_H,
-							borderRadius: 12,
+							borderRadius: 16,
 							overflow: "hidden",
 							border: `3px solid ${src ? INK : "rgba(31,58,44,0.2)"}`,
 							background: src ? INK : "rgba(255,255,255,0.4)",
@@ -115,7 +115,7 @@ async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Respons
 }
 
 /** Bump when the preview design changes; also busts crawler image caches. */
-export const OG_VERSION = 3;
+export const OG_VERSION = 1;
 
 const objectKey = (id: string) => `v${OG_VERSION}/${id}.png`;
 

@@ -14,45 +14,32 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 
 function itemFrom(v: unknown): Item | null {
 	if (!isObject(v)) return null;
-	// v1 drafts stored IGDB games as { id: number, name, year, imageId }.
-	if (typeof v.imageId === "string" && typeof v.id === "number") {
-		v = { source: "igdb", id: String(v.id), name: v.name, year: v.year, image: v.imageId };
-	}
-	const i = v as Record<string, unknown>;
+	const { source, id, name, image, year } = v;
 	if (
-		i.source !== "igdb" ||
-		typeof i.id !== "string" ||
-		typeof i.name !== "string" ||
-		typeof i.image !== "string"
+		source !== "igdb" ||
+		typeof id !== "string" ||
+		typeof name !== "string" ||
+		typeof image !== "string"
 	) {
 		return null;
 	}
-	return {
-		source: i.source,
-		id: i.id,
-		name: i.name,
-		image: i.image,
-		...(typeof i.year === "number" && { year: i.year }),
-	};
+	return { source, id, name, image, ...(typeof year === "number" && { year }) };
 }
 
 /**
- * Turns whatever is in localStorage into a valid draft, upgrading v1 drafts
- * (free-text title/subtitle, `slots`) and dropping anything unrecognized.
+ * Turns untrusted stored data (localStorage, cached API responses) into a
+ * valid grid, resetting unknown presets and dropping unrecognized items.
  */
-export function migrateDraft(raw: unknown): Grid {
+export function normalizeGrid(raw: unknown): Grid {
 	const grid = emptyGrid();
 	if (!isObject(raw)) return grid;
 
-	const slots = Array.isArray(raw.items) ? raw.items : Array.isArray(raw.slots) ? raw.slots : [];
-	grid.items = Array.from({ length: GRID_SIZE }, (_, i) => itemFrom(slots[i]));
-
-	if (raw.v === 2) {
-		if (isCategoryId(raw.category)) grid.category = raw.category;
-		if (typeof raw.subtitle === "string" && subtitleText(grid.category, raw.subtitle)) {
-			grid.subtitle = raw.subtitle;
-		}
-		if (isThemeId(raw.theme)) grid.theme = raw.theme;
+	const items = Array.isArray(raw.items) ? raw.items : [];
+	grid.items = Array.from({ length: GRID_SIZE }, (_, i) => itemFrom(items[i]));
+	if (isCategoryId(raw.category)) grid.category = raw.category;
+	if (typeof raw.subtitle === "string" && subtitleText(grid.category, raw.subtitle)) {
+		grid.subtitle = raw.subtitle;
 	}
+	if (isThemeId(raw.theme)) grid.theme = raw.theme;
 	return grid;
 }

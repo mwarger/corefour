@@ -5,7 +5,7 @@ const valid = () => ({
 	category: "games",
 	subtitle: "shaped",
 	theme: "sage",
-	items: [{ source: "igdb", id: "1029" }, null, null, null, null, null, null, null, null],
+	items: [{ source: "igdb", id: "1029" }, null, null, null],
 	turnstileToken: "token",
 });
 
@@ -30,13 +30,13 @@ describe("parseShareRequest", () => {
 
 	it.each([
 		["unknown category", { category: "memes" }],
-		["free-text subtitle", { subtitle: "The 9 Games That Shaped Who I Am" }],
+		["free-text subtitle", { subtitle: "The 4 Games That Shaped Who I Am" }],
 		["unknown theme", { theme: "neon" }],
 		["missing token", { turnstileToken: undefined }],
 		["wrong item count", { items: [{ source: "igdb", id: "1" }] }],
-		["all empty", { items: Array(9).fill(null) }],
-		["non-numeric IGDB id", { items: [{ source: "igdb", id: "1; drop" }, ...Array(8).fill(null)] }],
-		["unknown source", { items: [{ source: "evil", id: "1" }, ...Array(8).fill(null)] }],
+		["all empty", { items: Array(4).fill(null) }],
+		["non-numeric IGDB id", { items: [{ source: "igdb", id: "1; drop" }, ...Array(3).fill(null)] }],
+		["unknown source", { items: [{ source: "evil", id: "1" }, ...Array(3).fill(null)] }],
 	])("rejects %s", (_, patch) => {
 		expect(parseShareRequest({ ...valid(), ...patch })).toBeNull();
 	});

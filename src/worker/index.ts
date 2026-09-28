@@ -137,7 +137,7 @@ app.get("/g/:id", async (c) => {
 	const meta = `
 		<meta name="description" content="${description}" />
 		<meta property="og:type" content="website" />
-		<meta property="og:site_name" content="My 9" />
+		<meta property="og:site_name" content="Core Four" />
 		<meta property="og:title" content="${title}" />
 		<meta property="og:description" content="${description}" />
 		<meta property="og:url" content="${url}" />

@@ -33,15 +33,15 @@ export function Poster({ poster, edit, ref }: PosterProps) {
 	const category = CATEGORIES[poster.category];
 	return (
 		<div className="@container w-full">
-			<div ref={ref} className="poster-bg flex flex-col items-center gap-[3cqw] px-[3cqw] py-[2.5cqw]">
-				<header className="w-[47cqw] rounded-[2.5cqw] border border-black/10 bg-cream px-[3cqw] py-[1.4cqw] text-center shadow-sm">
-					<h1 className="text-[4.4cqw] leading-tight font-extrabold text-ink">
+			<div ref={ref} className="poster-bg flex flex-col items-center gap-[4cqw] px-[4cqw] py-[3.5cqw]">
+				<header className="w-[62cqw] rounded-[3cqw] border border-black/10 bg-cream px-[3.5cqw] py-[2cqw] text-center shadow-sm">
+					<h1 className="text-[6.2cqw] leading-tight font-extrabold text-ink">
 						{category.title}
 					</h1>
 					{edit ? (
 						<SubtitlePicker poster={poster} onChange={edit.onSubtitleChange} />
 					) : (
-						<p className="truncate text-[1.7cqw] font-semibold text-ink/70">
+						<p className="truncate text-[2.4cqw] font-semibold text-ink/70">
 							{subtitleText(poster.category, poster.subtitle)}
 						</p>
 					)}
@@ -50,18 +50,18 @@ export function Poster({ poster, edit, ref }: PosterProps) {
 				{edit ? (
 					<EditableGrid items={poster.items} noun={category.noun} edit={edit} />
 				) : (
-					<div className="grid w-full grid-cols-3 gap-[1.6cqw]">
+					<div className="grid w-full grid-cols-2 gap-[2.4cqw]">
 						{poster.items.map((item, i) =>
 							item ? (
 								<FilledTile key={i} item={item} />
 							) : (
-								<div key={i} className="aspect-[5/7] rounded-[1.8cqw] bg-white/40" />
+								<div key={i} className="aspect-[5/7] rounded-[2.6cqw] bg-white/40" />
 							),
 						)}
 					</div>
 				)}
 
-				<footer className="rounded-[2cqw] bg-cream/80 px-[4cqw] py-[0.6cqw] text-[1.5cqw] font-bold text-ink">
+				<footer className="rounded-[3cqw] bg-cream/80 px-[5cqw] py-[0.9cqw] text-[2.2cqw] font-bold text-ink">
 					{category.hashtag}
 				</footer>
 			</div>
@@ -77,9 +77,9 @@ export function Poster({ poster, edit, ref }: PosterProps) {
  */
 function SubtitlePicker({ poster, onChange }: { poster: Grid; onChange: (id: string) => void }) {
 	return (
-		<div className="relative mx-auto flex w-fit max-w-full items-center gap-[0.6cqw] text-[1.7cqw] font-semibold text-ink/70 hover:text-ink">
+		<div className="relative mx-auto flex w-fit max-w-full items-center gap-[0.8cqw] text-[2.4cqw] font-semibold text-ink/70 hover:text-ink">
 			<span className="truncate">{subtitleText(poster.category, poster.subtitle)}</span>
-			<span data-export-ignore aria-hidden className="text-[1.4cqw] opacity-60">
+			<span data-export-ignore aria-hidden className="text-[2cqw] opacity-60">
 				▾
 			</span>
 			<select
@@ -135,7 +135,7 @@ function EditableGrid({
 			onDragEnd={onDragEnd}
 			onDragCancel={() => setDragging(null)}
 		>
-			<div className="grid w-full grid-cols-3 gap-[1.6cqw]">
+			<div className="grid w-full grid-cols-2 gap-[2.4cqw]">
 				{items.map((item, i) => (
 					<Slot
 						key={i}
@@ -174,7 +174,7 @@ function Slot({
 		drop.setNodeRef(el);
 		drag.setNodeRef(el);
 	};
-	const highlight = drop.isOver && !isDragging ? "ring-[0.6cqw] ring-amber-400 ring-offset-2" : "";
+	const highlight = drop.isOver && !isDragging ? "ring-[0.9cqw] ring-amber-400 ring-offset-2" : "";
 	const t = drag.transform;
 
 	if (!item) {
@@ -183,10 +183,10 @@ function Slot({
 				ref={setRef}
 				type="button"
 				onClick={onPick}
-				className={`flex aspect-[5/7] cursor-pointer flex-col items-center justify-center gap-[1cqw] rounded-[1.8cqw] border-[0.35cqw] border-dashed border-ink/25 bg-white/40 text-ink/50 transition hover:border-ink/50 hover:bg-white/60 hover:text-ink/80 ${highlight}`}
+				className={`flex aspect-[5/7] cursor-pointer flex-col items-center justify-center gap-[1.5cqw] rounded-[2.6cqw] border-[0.5cqw] border-dashed border-ink/25 bg-white/40 text-ink/50 transition hover:border-ink/50 hover:bg-white/60 hover:text-ink/80 ${highlight}`}
 			>
-				<span className="text-[6cqw] leading-none font-light">+</span>
-				<span className="text-[1.8cqw] font-semibold">Add a {noun}</span>
+				<span className="text-[9cqw] leading-none font-light">+</span>
+				<span className="text-[2.6cqw] font-semibold">Add a {noun}</span>
 			</button>
 		);
 	}
@@ -202,7 +202,7 @@ function Slot({
 			style={
 				t ? { transform: `translate3d(${t.x}px, ${t.y}px, 0) rotate(2deg) scale(1.05)` } : undefined
 			}
-			className={`group relative touch-manipulation rounded-[1.8cqw] select-none [-webkit-touch-callout:none] ${
+			className={`group relative touch-manipulation rounded-[2.6cqw] select-none [-webkit-touch-callout:none] ${
 				isDragging ? "z-10 cursor-grabbing shadow-2xl" : "cursor-grab"
 			} ${highlight}`}
 		>
@@ -212,7 +212,7 @@ function Slot({
 				data-export-ignore
 				onClick={onClear}
 				aria-label={`Remove ${item.name}`}
-				className="absolute top-[1cqw] right-[1cqw] flex size-[4cqw] cursor-pointer items-center justify-center rounded-full bg-black/60 text-[2.4cqw] text-white opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+				className="absolute top-[1.5cqw] right-[1.5cqw] flex size-[5.5cqw] cursor-pointer items-center justify-center rounded-full bg-black/60 text-[3.2cqw] text-white opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
 			>
 				×
 			</button>
@@ -230,7 +230,7 @@ function FilledTile({ item, onPick }: { item: Item; onPick?: () => void }) {
 		/>
 	);
 	return (
-		<div className="relative aspect-[5/7] overflow-hidden rounded-[1.8cqw] bg-ink shadow-[0_0.6cqw_1.2cqw_rgba(0,0,0,0.25)] ring-[0.4cqw] ring-ink">
+		<div className="relative aspect-[5/7] overflow-hidden rounded-[2.6cqw] bg-ink shadow-[0_0.9cqw_1.8cqw_rgba(0,0,0,0.25)] ring-[0.6cqw] ring-ink">
 			{onPick ? (
 				<button
 					type="button"
@@ -243,7 +243,7 @@ function FilledTile({ item, onPick }: { item: Item; onPick?: () => void }) {
 			) : (
 				cover
 			)}
-			<div className="pointer-events-none absolute inset-x-[1cqw] bottom-[1cqw] rounded-[0.5cqw] bg-cream/95 px-[1.2cqw] py-[1cqw] text-left text-[1.45cqw] leading-tight font-semibold text-ink">
+			<div className="pointer-events-none absolute inset-x-[1.5cqw] bottom-[1.5cqw] rounded-[0.75cqw] bg-cream/95 px-[1.8cqw] py-[1.4cqw] text-left text-[2.2cqw] leading-tight font-semibold text-ink">
 				{item.name}
 			</div>
 		</div>

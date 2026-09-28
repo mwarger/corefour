@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { migrateDraft } from "../shared/draft.ts";
+import { normalizeGrid } from "../shared/draft.ts";
 import type { Grid, ShareRequest } from "../shared/types.ts";
 import { GRID_ID_PATTERN, gridId } from "./ids.ts";
 import { SOURCES } from "./sources/index.ts";
@@ -41,7 +41,5 @@ export async function saveGrid(grid: Grid): Promise<string> {
 export async function loadGrid(id: string): Promise<Grid | null> {
 	if (!GRID_ID_PATTERN.test(id)) return null;
 	const stored = await env.KV.get(`grid:${id}`, { type: "json", cacheTtl: 86_400 });
-	// Pre-v2 grids were rewritten in place, but edge caches may still serve
-	// the old shape for a while, so normalize on read.
-	return stored === null ? null : migrateDraft(stored);
+	return stored === null ? null : normalizeGrid(stored);
 }

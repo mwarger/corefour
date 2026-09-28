@@ -21,12 +21,12 @@ export interface Category {
 
 export const CATEGORIES = {
 	games: {
-		title: "My 9 Games",
-		hashtag: "#My9Games",
+		title: "My Core Four",
+		hashtag: "#CoreFour",
 		noun: "game",
 		source: "igdb",
 		subtitles: [
-			{ id: "shaped", text: "The 9 Games That Shaped Who I Am" },
+			{ id: "shaped", text: "The 4 Games That Shaped Who I Am" },
 			{ id: "favorites", text: "My All-Time Favorites" },
 			{ id: "desert-island", text: "Desert Island Picks" },
 			{ id: "comfort", text: "My Comfort Games" },

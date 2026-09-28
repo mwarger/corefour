@@ -25,7 +25,7 @@ export const toItem = ({ source, id, name, year, image }: Item): Item => ({
 	...(year !== undefined && { year }),
 });
 
-export const GRID_SIZE = 9;
+export const GRID_SIZE = 4;
 
 export interface Grid {
 	v: 2;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { emptyGrid, migrateDraft } from "../shared/draft.ts";
+import { emptyGrid, normalizeGrid } from "../shared/draft.ts";
 import type { Grid, Item } from "../shared/types.ts";
 
 export const STORAGE_KEY = "my9:draft";
@@ -7,7 +7,7 @@ export const STORAGE_KEY = "my9:draft";
 function loadDraft(): Grid {
 	try {
 		const saved = localStorage.getItem(STORAGE_KEY);
-		if (saved) return migrateDraft(JSON.parse(saved));
+		if (saved) return normalizeGrid(JSON.parse(saved));
 	} catch {}
 	return emptyGrid();
 }
