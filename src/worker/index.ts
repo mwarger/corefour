@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { loadGrid, parseGrid, saveGrid } from "./grids.ts";
 import { searchGames } from "./igdb.ts";
 
 const app = new Hono().basePath("/api");
@@ -47,6 +48,22 @@ app.get("/img/:size/:imageId", async (c) => {
 			"Content-Type": upstream.headers.get("Content-Type") ?? "image/jpeg",
 			"Cache-Control": "public, max-age=31536000, immutable",
 		},
+	});
+});
+
+app.post("/grids", async (c) => {
+	const grid = parseGrid(await c.req.json().catch(() => null));
+	if (!grid) return c.json({ error: "Invalid poster" }, 400);
+	return c.json({ id: await saveGrid(grid) }, 201);
+});
+
+// Grids are immutable (content-addressed), so they can be cached forever.
+app.get("/grids/:id", async (c) => {
+	const json = await loadGrid(c.req.param("id"));
+	if (!json) return c.json({ error: "Not found" }, 404);
+	return c.body(json, 200, {
+		"Content-Type": "application/json",
+		"Cache-Control": "public, max-age=31536000, immutable",
 	});
 });
 

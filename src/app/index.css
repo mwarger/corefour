@@ -1,9 +1,10 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 @theme {
 	--color-ink: #1f3a2c;
 	--color-cream: #f8f3e3;
-	--font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
 body {

@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
-import type { Game } from "../shared/types.ts";
+import type { Game, Grid } from "../shared/types.ts";
 
-export interface PosterState {
-	title: string;
-	subtitle: string;
-	slots: (Game | null)[];
-}
+export type PosterState = Grid;
 
-const STORAGE_KEY = "my9:draft";
+export const STORAGE_KEY = "my9:draft";
 
 export const emptyPoster = (): PosterState => ({
 	title: "My 9 Games",
