@@ -22,20 +22,21 @@ It runs entirely on Cloudflare's free tier. It is also a demo of an all-Effect s
 | Layer          | What                                                                                     | Where            |
 | -------------- | ---------------------------------------------------------------------------------------- | ---------------- |
 | Client         | [Foldkit](https://foldkit.dev): the Elm Architecture on [Effect](https://effect.website) | `src/app`        |
-| Shared         | Effect Schema types for posters, search results, and the API                             | `src/shared`     |
-| Server         | [Hono](https://hono.dev) on Cloudflare Workers                                           | `src/worker`     |
+| Shared         | Effect Schema types and the `HttpApi` definition both sides use                          | `src/shared`     |
+| Server         | Effect `HttpApi` and `HttpRouter` on Cloudflare Workers                                  | `src/worker`     |
 | Infrastructure | [Alchemy](https://alchemy.run) v2, infrastructure as an Effect program                   | `alchemy.run.ts` |
 
 **Client.** A Foldkit app with two pages, the editor (`/`) and a shared poster (`/g/:id`). Each page is a Submodel with its own Model, Messages, and update. The search picker is a `@foldkit/ui` Dialog. Drag-to-swap is hand-rolled on pointer events, because tiles swap in place instead of reordering a list. Side effects live in Commands (the API calls, draft autosave, PNG export, invisible Turnstile), and behavior is covered by Foldkit story and scene tests.
 
-**Shared schema.** The client encodes and the Worker decodes with the same Effect Schemas. A request that doesn't match, such as an unknown subtitle, a malformed ID, or an empty poster, is rejected at the boundary.
+**Shared API.** `src/shared/api.ts` declares every endpoint once with Effect's `HttpApi`: its path, params, payload, success schema, and typed errors (`GridNotFound`, `TooManyShares`, `NotVerified`, ...) with their HTTP statuses. The Worker implements it with `HttpApiBuilder`, and the client gets a typed client from the same definition with `HttpApiClient`, so the two can't drift apart. A request that doesn't match, such as an unknown subtitle, a malformed ID, or an empty poster, is rejected with a 400 before any handler runs.
 
-**Worker.**
+**Worker.** One Effect `HttpRouter` serves the API, the shared-poster pages, and falls back to the static client build for everything else.
 
 - `/api/search`: IGDB search through a Twitch app token (cached in KV). Results are ranked and cached with the Cache API.
 - `/api/img/...`: a same-origin cover proxy, so exporting the poster to PNG doesn't taint the canvas. It only fetches from each source's own image host.
 - `POST /api/grids`: rate-limited and Turnstile-verified. It resolves item IDs against IGDB and stores the poster in KV under a content-addressed ID, so sharing the same poster twice gives the same link.
 - `/g/:id`: serves the app with per-poster Open Graph tags injected by `HTMLRewriter`.
+- `/api/docs`: an interactive API reference (Scalar) generated from the same definition, with the OpenAPI document at `/api/openapi.json`.
 - `/api/og/:id.png`: a 1200×630 link preview rendered with satori and resvg, pre-rendered to R2 when the poster is shared. The layout is tuned to fit the Free plan's CPU limit; see `src/worker/ogLayout.tsx`.
 
 **Infrastructure.** `alchemy.run.ts` declares the KV namespace, R2 bucket, rate limiter, and the Worker with its static assets. Secrets come from `.env` files through `Config.Redacted`.
@@ -49,7 +50,7 @@ src/
     resource/   API client, draft storage, PNG export, Turnstile
     domain/     pure poster operations
   shared/       catalog (categories, subtitle presets) and Effect Schemas
-  worker/       Hono routes, IGDB source, share storage, OG image rendering
+  worker/       API handlers, share page, IGDB source, share storage, OG images
 test/           Worker and schema unit tests
 repos/foldkit/  vendored Foldkit source, for reference only (git subtree)
 ```

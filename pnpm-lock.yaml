@@ -199,9 +199,6 @@ importers:
       foldkit:
         specifier: 0.163.0
         version: 0.163.0(@effect/platform-browser@4.0.0-rc.116(effect@4.0.0-rc.116))(effect@4.0.0-rc.116)
-      hono:
-        specifier: ^4.13.9
-        version: 4.13.9
       modern-screenshot:
         specifier: ^4.7.0
         version: 4.7.0

@@ -85,8 +85,3 @@ export const ShareRequest = Schema.Struct({
   ),
 )
 export type ShareRequest = typeof ShareRequest.Type
-
-export const ShareRequestJson = Schema.toCodecJson(ShareRequest)
-
-export const ShareResponse = Schema.Struct({ id: Schema.String })
-export const ErrorResponse = Schema.Struct({ error: Schema.String })

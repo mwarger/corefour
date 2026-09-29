@@ -1,76 +1,91 @@
 import { env } from 'cloudflare:workers'
-import { Array, Option, Schema, pipe } from 'effect'
+import { Array, Effect, Option, Schema, pipe } from 'effect'
 
+import { GridId, ShareBusy, UnknownItem } from '../shared/api.ts'
 import { Grid, GridJson, type ShareRequest } from '../shared/schema.ts'
-import { GRID_ID_PATTERN, gridId } from './ids.ts'
+import { gridId } from './ids.ts'
 import { upgradeLegacyGrid } from './legacy.ts'
 import { SOURCES } from './sources/index.ts'
 
-/** Thrown when an item reference doesn't resolve in its source database. */
-export class UnknownItemError extends Error {}
-
-/** Thrown when KV's daily write quota is exhausted. */
-export class ShareBusyError extends Error {}
+const GRID_CACHE_TTL_SECONDS = 86_400
 
 const encodeGrid = Schema.encodeSync(GridJson)
 const decodeGrid = Schema.decodeUnknownOption(GridJson)
+const isGridId = Schema.is(GridId)
+
+const gridKey = (id: string) => `grid:${id}`
+
+const isWriteLimitError = (error: unknown) =>
+  error instanceof Error && /limit/i.test(error.message)
 
 /** Builds the stored grid from references, taking names and images from the source. */
-export const resolveGrid = async (request: ShareRequest): Promise<Grid> => {
-  const ids = pipe(
-    request.items,
-    Array.getSomes,
-    Array.map(({ id }) => id),
-    Array.dedupe,
-  )
-  const found = await SOURCES.Igdb.lookup(ids)
-  const items = Array.map(request.items, maybeRef =>
-    Option.map(maybeRef, ref => {
-      const item = found.get(ref.id)
-      if (!item) {
-        throw new UnknownItemError(`Unknown ${ref.source} item ${ref.id}`)
-      }
-      return item
-    }),
-  )
-  return Grid.make({
-    category: request.category,
-    subtitle: request.subtitle,
-    theme: request.theme,
-    items,
+export const resolveGrid = (request: ShareRequest) =>
+  Effect.gen(function* () {
+    const ids = pipe(
+      request.items,
+      Array.getSomes,
+      Array.map(({ id }) => id),
+      Array.dedupe,
+    )
+    const found = yield* Effect.promise(() => SOURCES.Igdb.lookup(ids))
+
+    const items = yield* Effect.forEach(request.items, maybeRef =>
+      Option.match(maybeRef, {
+        onNone: () => Effect.succeedNone,
+        onSome: ref =>
+          Option.match(Option.fromNullishOr(found.get(ref.id)), {
+            onNone: () => Effect.fail(new UnknownItem()),
+            onSome: Effect.succeedSome,
+          }),
+      }),
+    )
+
+    return Grid.make({
+      category: request.category,
+      subtitle: request.subtitle,
+      theme: request.theme,
+      items,
+    })
   })
-}
 
-/** Stores a grid under its content-addressed ID and returns the ID. */
-export const saveGrid = async (grid: Grid): Promise<string> => {
-  const json = encodeGrid(grid)
-  const id = await gridId(json)
-  const key = `grid:${id}`
-  if ((await env.KV.get(key)) === null) {
-    try {
-      await env.KV.put(key, json)
-    } catch (error) {
-      if (error instanceof Error && /limit/i.test(error.message)) {
-        throw new ShareBusyError()
-      }
-      throw error
+/**
+ * Stores a grid under its content-addressed ID and returns the ID. Sharing
+ * the same poster again finds the existing key and skips the write.
+ */
+export const saveGrid = (grid: Grid) =>
+  Effect.gen(function* () {
+    const json = encodeGrid(grid)
+    const id = yield* Effect.promise(() => gridId(json))
+    const key = gridKey(id)
+
+    const existing = yield* Effect.promise(() => env.KV.get(key))
+    if (existing === null) {
+      yield* Effect.tryPromise({
+        try: () => env.KV.put(key, json),
+        catch: error => error,
+      }).pipe(
+        Effect.catch(error =>
+          isWriteLimitError(error)
+            ? Effect.fail(new ShareBusy())
+            : Effect.die(error),
+        ),
+      )
     }
-  }
-  return id
-}
 
-export const loadGrid = async (id: string): Promise<Option.Option<Grid>> => {
-  if (!GRID_ID_PATTERN.test(id)) {
-    return Option.none()
-  }
-  const stored = await env.KV.get(`grid:${id}`, { cacheTtl: 86_400 })
-  return pipe(
-    Option.fromNullishOr(stored),
-    Option.flatMap(json => decodeGrid(upgradeLegacyGrid(json))),
-  )
-}
+    return id
+  })
 
-/** A stored grid as canonical JSON, if it exists and decodes. */
-export const loadGridJson = async (
-  id: string,
-): Promise<Option.Option<string>> => Option.map(await loadGrid(id), encodeGrid)
+export const loadGrid = (id: string) =>
+  Effect.gen(function* () {
+    if (!isGridId(id)) {
+      return Option.none<Grid>()
+    }
+
+    const stored = yield* Effect.promise(() =>
+      env.KV.get(gridKey(id), { cacheTtl: GRID_CACHE_TTL_SECONDS }),
+    )
+    return pipe(
+      Option.fromNullishOr(stored),
+      Option.flatMap(json => decodeGrid(upgradeLegacyGrid(json))),
+    )
+  })

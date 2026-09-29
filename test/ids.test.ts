@@ -1,6 +1,8 @@
+import { Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 
-import { GRID_ID_PATTERN, gridId } from '../src/worker/ids.ts'
+import { GridId } from '../src/shared/api.ts'
+import { gridId } from '../src/worker/ids.ts'
 
 describe('gridId', () => {
   it('is stable for the same content', async () => {
@@ -12,6 +14,6 @@ describe('gridId', () => {
   })
 
   it('matches the route pattern', async () => {
-    expect(await gridId('anything')).toMatch(GRID_ID_PATTERN)
+    expect(Schema.is(GridId)(await gridId('anything'))).toBe(true)
   })
 })

@@ -1,11 +1,12 @@
 import { env } from 'cloudflare:workers'
-import { Option } from 'effect'
+import { Effect, Option } from 'effect'
 
 import { cache, GoogleFont, render } from '@cf-wasm/og/workerd'
 import { Resvg } from '@cf-wasm/resvg/legacy/workerd'
 
 import { CATEGORIES, findSubtitle } from '../shared/catalog.ts'
 import type { Grid, Item } from '../shared/schema.ts'
+import { Execution } from './execution.ts'
 import { OG_HEIGHT, OG_WIDTH, ogLayout, withBackground } from './ogLayout.tsx'
 import { SOURCES } from './sources/index.ts'
 
@@ -27,7 +28,7 @@ async function coverDataUrl(item: Item): Promise<string | null> {
 async function renderOgImage(
   grid: Grid,
   ctx: ExecutionContext,
-): Promise<ArrayBuffer> {
+): Promise<Uint8Array> {
   cache.setExecutionContext(ctx)
   const covers = await Promise.all(
     grid.items.map(maybeItem =>
@@ -67,7 +68,7 @@ async function renderOgImage(
   const png = image.asPng()
   image.free()
   resvg.free()
-  return png.slice().buffer
+  return png
 }
 
 /** Bump when the preview design changes; also busts crawler image caches. */
@@ -82,18 +83,20 @@ export const ogImagePath = (id: string) => `/api/og/${id}.png?v=${OG_VERSION}`
  * image with a short timeout. So previews are rendered once, when
  * the poster is shared, and stored in R2.
  */
-export async function ensureOgImage(
-  id: string,
-  grid: Grid,
-  ctx: ExecutionContext,
-) {
-  const key = objectKey(id)
-  const existing = await env.OG_IMAGES.get(key)
-  if (existing) return existing.arrayBuffer()
+export const ensureOgImage = (id: string, grid: Grid) =>
+  Effect.gen(function* () {
+    const key = objectKey(id)
+    const existing = yield* Effect.promise(() => env.OG_IMAGES.get(key))
+    if (existing !== null) {
+      return yield* Effect.promise(() => existing.bytes())
+    }
 
-  const png = await renderOgImage(grid, ctx)
-  await env.OG_IMAGES.put(key, png, {
-    httpMetadata: { contentType: 'image/png' },
+    const execution = yield* Execution
+    const png = yield* Effect.promise(() => renderOgImage(grid, execution))
+    yield* Effect.promise(() =>
+      env.OG_IMAGES.put(key, png, {
+        httpMetadata: { contentType: 'image/png' },
+      }),
+    )
+    return png
   })
-  return png
-}

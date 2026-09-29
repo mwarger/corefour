@@ -1,6 +1,5 @@
+import type { ImageSize } from '../../shared/api.ts'
 import type { Item, SearchResult } from '../../shared/schema.ts'
-
-export type ImageSize = 'thumb' | 'cover' | 'og'
 
 export interface Source {
   search(query: string): Promise<ReadonlyArray<SearchResult>>

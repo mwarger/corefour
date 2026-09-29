@@ -12,7 +12,8 @@ subtree_prompted: true
 
 **Core Four**: people pick the 4 games (later movies, albums, ...) that shaped them and share a 2×2 poster. There is deliberately no free text: titles are fixed per category, subtitles are presets (`src/shared/catalog.ts`), and item names/covers always come from the source database (IGDB). The Worker re-resolves item IDs when a poster is shared.
 
-- **Layout:** Foldkit client in `src/app`, Cloudflare Worker (Hono) in `src/worker`, code shared by both in `src/shared`.
+- **API:** `src/shared/api.ts` is the single definition of the Worker API. The Worker implements it in `src/worker/api.ts` (`HttpApiBuilder`); the client calls it through `HttpApiClient` in `src/app/resource/api.ts`. Change the definition, not either side alone.
+- **Layout:** Foldkit client in `src/app`, Cloudflare Worker (Effect `HttpApi`/`HttpRouter`) in `src/worker`, code shared by both in `src/shared`.
 - **Infrastructure:** Alchemy v2, `alchemy.run.ts` (stack `CoreFour`). `pnpm dev` runs `alchemy dev`; `pnpm run deploy` deploys the `prod` stage using `.env.prod` (never `pnpm deploy`, which is a pnpm builtin). Always confirm with the user before deploying.
 - **Secrets:** `.env` (local dev, Turnstile test secret) and `.env.prod` (production). Both gitignored; see `.env.example`.
 - **Versions:** `effect` is pinned to exactly `4.0.0-rc.116` because `foldkit@0.163.0` requires it (alchemy accepts it). Upgrade them together.

@@ -1,9 +1,11 @@
 import { Option, Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 
-import { GridJson, ShareRequestJson } from '../src/shared/schema.ts'
+import { GridJson, ShareRequest } from '../src/shared/schema.ts'
 
-const decodeShareRequest = Schema.decodeUnknownOption(ShareRequestJson)
+const decodeShareRequest = Schema.decodeUnknownOption(
+  Schema.toCodecJson(ShareRequest),
+)
 const decodeGridJson = Schema.decodeUnknownOption(GridJson)
 
 const validRequest = () => ({

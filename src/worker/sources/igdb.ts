@@ -1,9 +1,10 @@
 import { env } from 'cloudflare:workers'
 import { Option } from 'effect'
 
+import type { ImageSize } from '../../shared/api.ts'
 import { Item, SearchResult } from '../../shared/schema.ts'
 import { rankResults } from './ranking.ts'
-import type { ImageSize, Source } from './types.ts'
+import type { Source } from './types.ts'
 
 const TOKEN_KEY = 'igdb:token'
 
