@@ -26,25 +26,35 @@ const LoadExternal = Command.define('LoadExternal', {
     load(href).pipe(Effect.as(Message.CompletedLoadExternal())),
 })
 
+const readEditor = (model: Model) => Option.some(model.editor)
+const writeEditor = (model: Model, nextEditor: Editor.Model): Model =>
+  modifyFields(model, { editor: () => nextEditor })
+const toGotEditorMessage = (message: Editor.Message): Message =>
+  Message.GotEditorMessage({ message })
+
+const readShared = (model: Model) => Option.some(model.shared)
+const writeShared = (model: Model, nextShared: Shared.Model): Model =>
+  modifyFields(model, { shared: () => nextShared })
+const toGotSharedMessage = (message: Shared.Message): Message =>
+  Message.GotSharedMessage({ message })
+
 const foldEditor = Update.foldChild({
   update: Editor.update,
-  read: (model: Model) => Option.some(model.editor),
-  write: (model, nextEditor) =>
-    modifyFields(model, { editor: () => nextEditor }),
-  toParentMessage: message => Message.GotEditorMessage({ message }),
+  read: readEditor,
+  write: writeEditor,
+  toParentMessage: toGotEditorMessage,
 })
 
-const replaceEditorGrid = (grid: Grid): Update.Step<Model, Message> =>
+const loadIntoEditor = (grid: Grid): Update.Step<Model, Message> =>
   Update.foldChildStep({
-    update: (editor: Editor.Model) => Editor.replaceGrid(editor, grid),
-    read: (model: Model) => Option.some(model.editor),
-    write: (model, nextEditor) =>
-      modifyFields(model, { editor: () => nextEditor }),
-    toParentMessage: message => Message.GotEditorMessage({ message }),
+    update: Editor.editGrid(() => grid),
+    read: readEditor,
+    write: writeEditor,
+    toParentMessage: toGotEditorMessage,
   })
 
-const navigateToEditor: Update.Step<Model, Message> = stepModel => ({
-  model: stepModel,
+const navigateToEditor: Update.Step<Model, Message> = model => ({
+  model,
   commands: [NavigateInternal({ url: editorRouter() })],
 })
 
@@ -54,40 +64,38 @@ const foldSharedOutMessage = Shared.OutMessage.match<
   RequestedRemix:
     ({ grid }) =>
     model =>
-      Update.combine(model, [replaceEditorGrid(grid), navigateToEditor]),
+      Update.combine(model, [loadIntoEditor(grid), navigateToEditor]),
 })
 
 const foldShared = Update.foldChild({
   update: Shared.update,
-  read: (model: Model) => Option.some(model.shared),
-  write: (model, nextShared) =>
-    modifyFields(model, { shared: () => nextShared }),
-  toParentMessage: message => Message.GotSharedMessage({ message }),
+  read: readShared,
+  write: writeShared,
+  toParentMessage: toGotSharedMessage,
   foldOutMessage: foldSharedOutMessage,
 })
 
-const enterRoute = (model: Model, route: AppRoute): UpdateReturn => {
-  const routedModel = modifyFields(model, { route: () => route })
+/** Switches to a route, loading the shared poster it names unless already shown. */
+export const enterRoute =
+  (route: AppRoute): Update.Step<Model, Message> =>
+  model => {
+    const routedModel = modifyFields(model, { route: () => route })
 
-  return AppRoute.matchOrElse<UpdateReturn>(
-    route,
-    {
-      Shared: ({ id }) => {
-        if (id === model.shared.gridId) {
-          return { model: routedModel }
-        }
-        const sharedInit = Shared.init(id)
-        return {
-          model: modifyFields(routedModel, { shared: () => sharedInit.model }),
-          commands: Command.mapMessages(sharedInit.commands, message =>
-            Message.GotSharedMessage({ message }),
-          ),
-        }
+    return AppRoute.matchOrElse<UpdateReturn>(
+      route,
+      {
+        Shared: ({ id }) =>
+          Shared.isShowing(model.shared, id)
+            ? { model: routedModel }
+            : Update.foldChildInit(Shared.init(id), {
+                toParentModel: nextShared =>
+                  writeShared(routedModel, nextShared),
+                toParentMessage: toGotSharedMessage,
+              }),
       },
-    },
-    () => ({ model: routedModel }),
-  )
-}
+      () => ({ model: routedModel }),
+    )
+  }
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
@@ -103,7 +111,7 @@ export const update = (model: Model, message: Message) =>
         }),
       }),
 
-    ChangedUrl: ({ url }) => enterRoute(model, urlToAppRoute(url)),
+    ChangedUrl: ({ url }) => enterRoute(urlToAppRoute(url))(model),
 
     CompletedNavigateInternal: () => ({ model }),
     CompletedLoadExternal: () => ({ model }),

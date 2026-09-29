@@ -1,7 +1,7 @@
-import { Option } from 'effect'
+import { Option, pipe } from 'effect'
 
 import { Item, SearchResult } from '../shared/schema'
-import * as GridDomain from './domain/grid'
+import * as Poster from './domain/poster'
 
 export const zeldaResult = SearchResult.make({
   source: 'Igdb',
@@ -40,7 +40,8 @@ export const crazyTaxi = Item.make({
 })
 
 /** Zelda in slot 1 and Crazy Taxi in slot 2; slots 3 and 4 empty. */
-export const twoItemGrid = GridDomain.setItem(
-  1,
-  Option.some(crazyTaxi),
-)(GridDomain.setItem(0, Option.some(zelda))(GridDomain.empty()))
+export const twoItemGrid = pipe(
+  Poster.empty(),
+  Poster.setItem(0, Option.some(zelda)),
+  Poster.setItem(1, Option.some(crazyTaxi)),
+)

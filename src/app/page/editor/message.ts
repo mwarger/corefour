@@ -1,7 +1,8 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { MoveDirection } from '../../domain/grid'
+import { MoveDirection } from '../../domain/poster'
+import * as PosterDownload from '../../posterDownload'
 import { Pointer } from './model'
 import * as Picker from './picker'
 
@@ -10,13 +11,11 @@ export const Message = defineMessageUnion({
   ClickedSlot: { slotIndex: Schema.Number },
   ClickedRemoveItem: { slotIndex: Schema.Number },
   ClickedStartOver: {},
-  ClickedDownloadPng: {},
-  SucceededExportPoster: {},
-  FailedExportPoster: { error: Schema.String },
   ClickedShareLink: {},
-  SucceededShareGrid: { url: Schema.String },
-  FailedShareGrid: { error: Schema.String },
-  CompletedCopyShareUrl: {},
+  SucceededShareGrid: { generation: Schema.Number, url: Schema.String },
+  FailedShareGrid: { generation: Schema.Number, error: Schema.String },
+  SucceededCopyShareUrl: { url: Schema.String },
+  FailedCopyShareUrl: { url: Schema.String },
   CompletedSaveDraft: {},
   PressedSlot: {
     slotIndex: Schema.Number,
@@ -35,5 +34,6 @@ export const Message = defineMessageUnion({
   PressedMoveKey: { slotIndex: Schema.Number, direction: MoveDirection },
   CompletedFocusSlot: {},
   GotPickerMessage: { message: Picker.Message },
+  GotPosterDownloadMessage: { message: PosterDownload.Message },
 })
 export type Message = typeof Message.Type

@@ -5,6 +5,8 @@ import { Dialog } from '@foldkit/ui'
 
 import { SearchResult, SearchResults } from '../../../../shared/schema'
 
+// MESSAGE
+
 export const Message = defineMessageUnion({
   UpdatedQuery: { value: Schema.String },
   CompletedWaitBeforeSearch: { generation: Schema.Number },
@@ -15,6 +17,8 @@ export const Message = defineMessageUnion({
   GotDialogMessage: { message: Dialog.Message },
 })
 export type Message = typeof Message.Type
+
+// OUT MESSAGE
 
 export const OutMessage = defineMessageUnion({
   SelectedResult: { slotIndex: Schema.Number, result: SearchResult },

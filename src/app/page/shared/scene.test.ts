@@ -1,4 +1,5 @@
-import { expect, given, role, scene, text } from 'foldkit/scene'
+import { expect, given, role, scene } from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
 import { test } from 'vitest'
 
 import { twoItemGrid, zelda } from '../../fixture'
@@ -6,11 +7,8 @@ import { GridData } from './model'
 import { initIdle, update } from './update'
 import { view } from './view'
 
-const withGrid = (grid: typeof GridData.schema.Type) => ({
-  ...initIdle(),
-  gridId: 'abc1234567',
-  grid,
-})
+const withGrid = (grid: typeof GridData.schema.Type) =>
+  modifyFields(initIdle(), { grid: () => grid })
 
 test('a loaded poster is read-only with remix and download actions', () => {
   scene(
@@ -29,7 +27,15 @@ test('a missing poster says so and links to the editor', () => {
   scene(
     { update, view },
     given(withGrid(GridData.Failure({ error: 'NotFound' }))),
-    expect(text("This poster doesn't exist.", { exact: false })).toExist(),
+    expect(role('heading', { name: "This poster doesn't exist." })).toExist(),
     expect(role('link', { name: 'Make your own' })).toHaveAttr('href', '/'),
+  )
+})
+
+test('a poster that could not be loaded says so', () => {
+  scene(
+    { update, view },
+    given(withGrid(GridData.Failure({ error: 'Unavailable' }))),
+    expect(role('heading', { name: "Couldn't load this poster." })).toExist(),
   )
 })

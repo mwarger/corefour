@@ -1,36 +1,50 @@
 import { Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import * as GridDomain from '../../domain/grid'
+import type { Grid } from '../../../shared/schema'
+import * as Poster from '../../domain/poster'
 import { twoItemGrid, zelda, zeldaResult } from '../../fixture'
+import * as PosterDownload from '../../posterDownload'
 import {
   CopyShareUrl,
-  ExportPoster,
   FocusSlot,
   SaveDraft,
   ShareGrid,
   WaitForLongPress,
 } from './command'
 import { Message } from './message'
-import { init } from './model'
+import { Drag, ShareState, init } from './model'
 import * as Picker from './picker'
 import { update } from './update'
 
 const SHARE_URL = 'http://localhost/g/abc1234567'
 
-const itemNames = (grid: typeof twoItemGrid) =>
+const itemNames = (grid: Grid) =>
   grid.items.map(maybeItem =>
     Option.match(maybeItem, { onNone: () => null, onSome: ({ name }) => name }),
   )
+
+const pressedByTouch = modifyFields(init(twoItemGrid), {
+  pressCount: () => 1,
+  drag: () =>
+    Drag.Pressing({
+      slotIndex: 0,
+      pointer: 'Touch',
+      pressId: 1,
+      originX: 100,
+      originY: 100,
+    }),
+})
 
 describe('picking a game', () => {
   test('a picked search result fills the slot and saves the draft', () => {
     story(
       update,
-      given(init(GridDomain.empty())),
+      given(init(Poster.empty())),
       message(Message.ClickedSlot({ slotIndex: 2 })),
       Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
       message(
@@ -39,11 +53,11 @@ describe('picking a game', () => {
         }),
       ),
       model(({ grid }) => {
-        expect(GridDomain.itemAt(grid, 2)).toEqual(Option.some(zelda))
+        expect(Poster.itemAt(grid, 2)).toEqual(Option.some(zelda))
       }),
       Command.expectHas(
         SaveDraft({
-          grid: GridDomain.setItem(2, Option.some(zelda))(GridDomain.empty()),
+          grid: Poster.setItem(2, Option.some(zelda))(Poster.empty()),
         }),
       ),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
@@ -65,10 +79,22 @@ describe('picking a game', () => {
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
     )
   })
+
+  test('starting over clears every slot', () => {
+    story(
+      update,
+      given(init(twoItemGrid)),
+      message(Message.ClickedStartOver()),
+      model(({ grid }) => {
+        expect(grid).toEqual(Poster.empty())
+      }),
+      Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+    )
+  })
 })
 
 describe('dragging with a mouse', () => {
-  test('a small wobble is still a click, not a drag', () => {
+  test('a small wobble stays a press, so the click still opens the picker', () => {
     story(
       update,
       given(init(twoItemGrid)),
@@ -100,7 +126,7 @@ describe('dragging with a mouse', () => {
     )
   })
 
-  test('dropping on another slot swaps the games and swallows the click', () => {
+  test('dropping on another slot swaps the games', () => {
     story(
       update,
       given(init(twoItemGrid)),
@@ -119,27 +145,25 @@ describe('dragging with a mouse', () => {
           maybeTargetIndex: Option.some(0),
         }),
       ),
-      message(
-        Message.MovedPointer({
-          clientX: 90,
-          clientY: 100,
-          maybeTargetIndex: Option.some(0),
-        }),
-      ),
       model(({ drag }) => {
-        expect(drag._tag).toBe('Dragging')
+        expect(drag).toEqual(
+          Drag.Dragging({
+            slotIndex: 1,
+            pointer: 'Mouse',
+            originX: 300,
+            originY: 100,
+            currentX: 100,
+            currentY: 100,
+            maybeTargetIndex: Option.some(0),
+          }),
+        )
       }),
       message(Message.ReleasedPointer()),
       model(({ grid, drag }) => {
         expect(itemNames(grid)).toEqual(['Crazy Taxi', zelda.name, null, null])
-        expect(drag._tag).toBe('JustDropped')
+        expect(drag._tag).toBe('Idle')
       }),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
-      message(Message.ClickedSlot({ slotIndex: 1 })),
-      model(({ drag, picker }) => {
-        expect(drag._tag).toBe('Idle')
-        expect(picker.dialog.isOpen).toBe(false)
-      }),
     )
   })
 
@@ -163,8 +187,9 @@ describe('dragging with a mouse', () => {
         }),
       ),
       message(Message.ReleasedPointer()),
-      model(({ grid }) => {
+      model(({ grid, drag }) => {
         expect(grid).toEqual(twoItemGrid)
+        expect(drag._tag).toBe('Idle')
       }),
       Command.expectNone(),
     )
@@ -213,30 +238,35 @@ describe('dragging with touch', () => {
   })
 
   test('moving before the long press lets the page scroll instead', () => {
-    const pressed = update(
-      init(twoItemGrid),
-      Message.PressedSlot({
-        slotIndex: 0,
-        pointer: 'Touch',
-        clientX: 100,
-        clientY: 100,
+    story(
+      update,
+      given(pressedByTouch),
+      message(
+        Message.MovedPointer({
+          clientX: 100,
+          clientY: 140,
+          maybeTargetIndex: Option.none(),
+        }),
+      ),
+      model(({ drag }) => {
+        expect(drag._tag).toBe('Idle')
+      }),
+      message(Message.CompletedWaitForLongPress({ pressId: 1 })),
+      model(({ drag }) => {
+        expect(drag._tag).toBe('Idle')
       }),
     )
-    const scrolled = update(
-      pressed.model,
-      Message.MovedPointer({
-        clientX: 100,
-        clientY: 140,
-        maybeTargetIndex: Option.none(),
-      }),
-    )
-    const lateLongPress = update(
-      scrolled.model,
-      Message.CompletedWaitForLongPress({ pressId: 1 }),
-    )
+  })
 
-    expect(scrolled.model.drag._tag).toBe('Idle')
-    expect(lateLongPress.model.drag._tag).toBe('Idle')
+  test('the browser cancelling the touch ends the press', () => {
+    story(
+      update,
+      given(pressedByTouch),
+      message(Message.CancelledPointer()),
+      model(({ drag }) => {
+        expect(drag._tag).toBe('Idle')
+      }),
+    )
   })
 })
 
@@ -277,16 +307,42 @@ describe('sharing', () => {
       given(init(twoItemGrid)),
       message(Message.ClickedShareLink()),
       model(({ share }) => {
-        expect(share._tag).toBe('Sharing')
+        expect(share).toEqual(ShareState.Sharing({ generation: 1 }))
       }),
       Command.resolve(
         ShareGrid,
-        Message.SucceededShareGrid({ url: SHARE_URL }),
+        Message.SucceededShareGrid({ generation: 1, url: SHARE_URL }),
+      ),
+      Command.resolve(
+        CopyShareUrl,
+        Message.SucceededCopyShareUrl({ url: SHARE_URL }),
       ),
       model(({ share }) => {
-        expect(share).toEqual({ _tag: 'Shared', url: SHARE_URL })
+        expect(share).toEqual(
+          ShareState.Shared({ url: SHARE_URL, clipboard: 'Copied' }),
+        )
       }),
-      Command.resolve(CopyShareUrl, Message.CompletedCopyShareUrl()),
+    )
+  })
+
+  test('a blocked clipboard still shows the link, without claiming it was copied', () => {
+    story(
+      update,
+      given(init(twoItemGrid)),
+      message(Message.ClickedShareLink()),
+      Command.resolve(
+        ShareGrid,
+        Message.SucceededShareGrid({ generation: 1, url: SHARE_URL }),
+      ),
+      Command.resolve(
+        CopyShareUrl,
+        Message.FailedCopyShareUrl({ url: SHARE_URL }),
+      ),
+      model(({ share }) => {
+        expect(share).toEqual(
+          ShareState.Shared({ url: SHARE_URL, clipboard: 'NotCopied' }),
+        )
+      }),
     )
   })
 
@@ -298,88 +354,66 @@ describe('sharing', () => {
       Command.resolve(
         ShareGrid,
         Message.FailedShareGrid({
+          generation: 1,
           error: 'Too many shares. Try again in a minute.',
         }),
       ),
       model(({ share }) => {
-        expect(share).toEqual({
-          _tag: 'Failed',
-          error: 'Too many shares. Try again in a minute.',
-        })
+        expect(share).toEqual(
+          ShareState.Failed({
+            error: 'Too many shares. Try again in a minute.',
+          }),
+        )
       }),
+    )
+  })
+
+  test('a share that finishes after the poster was edited is ignored', () => {
+    story(
+      update,
+      given(
+        modifyFields(init(twoItemGrid), {
+          shareCount: () => 1,
+          share: () => ShareState.Idle(),
+        }),
+      ),
+      message(Message.SucceededShareGrid({ generation: 1, url: SHARE_URL })),
+      model(({ share }) => {
+        expect(share).toEqual(ShareState.Idle())
+      }),
+      Command.expectNone(),
     )
   })
 
   test('an empty poster cannot be shared', () => {
     story(
       update,
-      given(init(GridDomain.empty())),
+      given(init(Poster.empty())),
       message(Message.ClickedShareLink()),
       Command.expectNone(),
     )
   })
 
-  test('editing the poster drops the old share link', () => {
+  test('editing the poster drops the share link and any download error', () => {
     story(
       update,
-      given(init(twoItemGrid)),
-      message(Message.ClickedShareLink()),
-      Command.resolve(
-        ShareGrid,
-        Message.SucceededShareGrid({ url: SHARE_URL }),
+      given(
+        modifyFields(init(twoItemGrid), {
+          share: () =>
+            ShareState.Shared({ url: SHARE_URL, clipboard: 'Copied' }),
+          posterDownload: () =>
+            PosterDownload.Model.Failed({
+              error: "Couldn't create the image.",
+            }),
+        }),
       ),
-      Command.resolve(CopyShareUrl, Message.CompletedCopyShareUrl()),
       message(Message.SelectedSubtitle({ subtitleId: 'comfort' })),
-      model(({ share, grid }) => {
-        expect(share._tag).toBe('Idle')
+      model(({ share, posterDownload, grid }) => {
+        expect(share).toEqual(ShareState.Idle())
+        expect(posterDownload).toEqual(PosterDownload.Model.Idle())
         expect(grid.subtitle).toBe('comfort')
       }),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
     )
   })
-})
-
-describe('downloading the image', () => {
-  test('exporting names the file after the poster', () => {
-    story(
-      update,
-      given(init(twoItemGrid)),
-      message(Message.ClickedDownloadPng()),
-      Command.expectExact(ExportPoster({ filename: 'my-core-four.png' })),
-      Command.resolve(ExportPoster, Message.SucceededExportPoster()),
-      model(({ imageExport }) => {
-        expect(imageExport._tag).toBe('Idle')
-      }),
-    )
-  })
-
-  test('a failed export says so', () => {
-    story(
-      update,
-      given(init(twoItemGrid)),
-      message(Message.ClickedDownloadPng()),
-      Command.resolve(
-        ExportPoster,
-        Message.FailedExportPoster({ error: "Couldn't create the image." }),
-      ),
-      model(({ imageExport }) => {
-        expect(imageExport).toEqual({
-          _tag: 'Failed',
-          error: "Couldn't create the image.",
-        })
-      }),
-    )
-  })
-})
-
-test('starting over clears every slot', () => {
-  story(
-    update,
-    given(init(twoItemGrid)),
-    message(Message.ClickedStartOver()),
-    model(({ grid }) => {
-      expect(grid).toEqual(GridDomain.empty())
-    }),
-    Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
-  )
 })

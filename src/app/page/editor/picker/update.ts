@@ -15,7 +15,7 @@ const MIN_QUERY_LENGTH = 2
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
 
 /** The trimmed query, when it is long enough to search. */
-export const searchableQuery = (query: string): Option.Option<string> =>
+const searchableQuery = (query: string): Option.Option<string> =>
   Option.liftPredicate(
     query.trim(),
     trimmed => trimmed.length >= MIN_QUERY_LENGTH,
@@ -75,7 +75,7 @@ export const open =
       }),
     )
 
-const select = (model: Model, result: SearchResult): UpdateReturn =>
+const selectResult = (model: Model, result: SearchResult): UpdateReturn =>
   pipe(
     foldDialogClose(model),
     Update.withOutMessage(
@@ -92,33 +92,37 @@ const settleSearch = (
     ? { model: modifyFields(model, { results: AsyncData.settle(result) }) }
     : { model }
 
+const handleUpdatedQuery =
+  (model: Model) =>
+  ({ value }: { value: string }): UpdateReturn => {
+    const generation = model.searchGeneration + 1
+    const nextModel = modifyFields(model, {
+      query: () => value,
+      searchGeneration: () => generation,
+    })
+
+    return Option.match(searchableQuery(value), {
+      onNone: () => ({
+        model: modifyFields(nextModel, {
+          results: () => SearchResultsData.Idle(),
+        }),
+      }),
+      onSome: () => ({
+        model: modifyFields(nextModel, {
+          results: results =>
+            Option.getOrElse(
+              AsyncData.revalidateOrLoad(results),
+              () => results,
+            ),
+        }),
+        commands: [WaitBeforeSearch({ generation })],
+      }),
+    })
+  }
+
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
-    UpdatedQuery: ({ value }) => {
-      const generation = model.searchGeneration + 1
-      const nextModel = modifyFields(model, {
-        query: () => value,
-        searchGeneration: () => generation,
-      })
-
-      return Option.match(searchableQuery(value), {
-        onNone: () => ({
-          model: modifyFields(nextModel, {
-            results: () => SearchResultsData.Idle(),
-          }),
-        }),
-        onSome: () => ({
-          model: modifyFields(nextModel, {
-            results: results =>
-              Option.getOrElse(
-                AsyncData.revalidateOrLoad(results),
-                () => results,
-              ),
-          }),
-          commands: [WaitBeforeSearch({ generation })],
-        }),
-      })
-    },
+    UpdatedQuery: handleUpdatedQuery(model),
 
     CompletedWaitBeforeSearch: ({ generation }) =>
       generation === model.searchGeneration
@@ -137,7 +141,7 @@ export const update = (model: Model, message: Message) =>
     FailedSearchItems: ({ query, error }) =>
       settleSearch(model, query, Result.fail(error)),
 
-    ClickedResult: ({ result }) => select(model, result),
+    ClickedResult: ({ result }) => selectResult(model, result),
 
     SubmittedSearch: () =>
       pipe(
@@ -145,7 +149,7 @@ export const update = (model: Model, message: Message) =>
         Option.flatMap(Array.head),
         Option.match({
           onNone: () => ({ model }),
-          onSome: result => select(model, result),
+          onSome: result => selectResult(model, result),
         }),
       ),
 

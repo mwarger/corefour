@@ -3,9 +3,9 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { CATEGORIES, findSubtitle } from '../../shared/catalog'
 import type { Grid, Item } from '../../shared/schema'
-import { EXPORT_IGNORE_ATTRIBUTE } from '../resource/posterImage'
+import { DOWNLOAD_IGNORE_ATTRIBUTE } from '../resource/posterDownload'
 
-/** The poster element exported to PNG. One poster renders per page. */
+/** The poster element saved as a PNG. One poster renders per page. */
 export const POSTER_ELEMENT_ID = 'poster'
 
 export type CoverSize = 'thumb' | 'cover'
@@ -28,7 +28,7 @@ export type PosterConfig = Readonly<{
 }>
 
 // NOTE: sizes use container query units so the poster scales as one piece
-// and exports identically at any width.
+// and downloads identically at any width.
 export const posterView = <Message>(
   { grid, subtitle, slots }: PosterConfig,
   h: HtmlBuilder<Message>,
@@ -135,6 +135,6 @@ export const filledTileView = <Message>(
     ],
   )
 
-/** Attribute that keeps an editing control out of the exported PNG. */
-export const exportIgnore = <Message>(h: HtmlBuilder<Message>) =>
-  h.DataAttribute(EXPORT_IGNORE_ATTRIBUTE, '')
+/** Attribute that keeps an editing control out of the downloaded PNG. */
+export const downloadIgnore = <Message>(h: HtmlBuilder<Message>) =>
+  h.DataAttribute(DOWNLOAD_IGNORE_ATTRIBUTE, '')

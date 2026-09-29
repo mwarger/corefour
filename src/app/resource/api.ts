@@ -1,4 +1,4 @@
-import { Data, Effect, Schema } from 'effect'
+import { Data, Duration, Effect, Schema } from 'effect'
 import {
   HttpClient,
   HttpClientRequest,
@@ -17,6 +17,7 @@ import {
 } from '../../shared/schema'
 
 const HTTP_NOT_FOUND = 404
+const REQUEST_TIMEOUT = Duration.seconds(20)
 
 const SEARCH_FAILED = 'Search failed. Try again in a moment.'
 const LOAD_FAILED = "Couldn't load this poster."
@@ -40,6 +41,7 @@ const send = (request: HttpClientRequest.HttpClientRequest, failure: string) =>
     const client = yield* HttpClient.HttpClient
     return yield* client.execute(request)
   }).pipe(
+    Effect.timeout(REQUEST_TIMEOUT),
     Effect.mapError(() => new ApiError({ message: failure })),
     Effect.provide(Http.layer),
   )
@@ -93,8 +95,14 @@ export const fetchGrid = (id: string) =>
 /** Shares a poster and resolves to its content-addressed ID. */
 export const shareGrid = (request: ShareRequest) =>
   Effect.gen(function* () {
-    const httpRequest = yield* HttpClientRequest.post('/api/grids').pipe(
-      HttpClientRequest.bodyJson(Schema.encodeSync(ShareRequestJson)(request)),
+    const httpRequest = yield* Schema.encodeEffect(ShareRequestJson)(
+      request,
+    ).pipe(
+      Effect.flatMap(body =>
+        HttpClientRequest.post('/api/grids').pipe(
+          HttpClientRequest.bodyJson(body),
+        ),
+      ),
       Effect.mapError(() => new ApiError({ message: SHARE_FAILED })),
     )
     const response = yield* send(httpRequest, SHARE_FAILED)

@@ -1,14 +1,15 @@
 import { Effect, Option, Schema } from 'effect'
-import { Command, type Runtime, type Update } from 'foldkit'
+import type { Runtime, Update } from 'foldkit'
 import type { Url } from 'foldkit/url'
 
 import { Grid } from '../shared/schema'
-import * as GridDomain from './domain/grid'
-import { Message } from './message'
-import { Model } from './model'
+import * as Poster from './domain/poster'
+import type { Message } from './message'
+import type { Model } from './model'
 import { Editor, Shared } from './page'
 import { loadDraft } from './resource/draftStorage'
-import { AppRoute, urlToAppRoute } from './route'
+import { urlToAppRoute } from './route'
+import { enterRoute } from './update'
 
 // FLAGS
 
@@ -28,23 +29,9 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags> = (
   url: Url,
 ): Update.Return<Model, Message> => {
   const route = urlToAppRoute(url)
-  const editor = Editor.init(
-    Option.getOrElse(flags.maybeDraft, GridDomain.empty),
-  )
-
-  return AppRoute.matchOrElse<Update.Return<Model, Message>>(
+  return enterRoute(route)({
     route,
-    {
-      Shared: ({ id }) => {
-        const sharedInit = Shared.init(id)
-        return {
-          model: { route, editor, shared: sharedInit.model },
-          commands: Command.mapMessages(sharedInit.commands, message =>
-            Message.GotSharedMessage({ message }),
-          ),
-        }
-      },
-    },
-    () => ({ model: { route, editor, shared: Shared.initIdle() } }),
-  )
+    editor: Editor.init(Option.getOrElse(flags.maybeDraft, Poster.empty)),
+    shared: Shared.initIdle(),
+  })
 }

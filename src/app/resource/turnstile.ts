@@ -1,10 +1,12 @@
-import { Data, Effect, Option } from 'effect'
+import { Data, Duration, Effect, Option } from 'effect'
 
 // NOTE: site keys are public. In dev this is Cloudflare's invisible test key,
 // which always passes (paired with the test secret in .env).
 const SITE_KEY = import.meta.env.DEV
   ? '1x00000000000000000000BB'
   : '0x4AAAAAAFIOBx02cnhc0Puz'
+
+const VERIFICATION_TIMEOUT = Duration.seconds(30)
 
 const SCRIPT_URL =
   'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
@@ -103,5 +105,15 @@ export const getTurnstileToken: Effect.Effect<string, TurnstileError> =
         })
         return Effect.sync(() => api.remove(widgetId))
       })
+    }),
+  ).pipe(
+    Effect.timeoutOrElse({
+      duration: VERIFICATION_TIMEOUT,
+      orElse: () =>
+        Effect.fail(
+          new TurnstileError({
+            message: 'Verification timed out. Please try again.',
+          }),
+        ),
     }),
   )

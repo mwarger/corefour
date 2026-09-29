@@ -3,6 +3,8 @@ import { AsyncData, Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import type { Grid } from '../../../shared/schema'
+import * as Poster from '../../domain/poster'
+import * as PosterDownload from '../../posterDownload'
 import { editorRouter } from '../../route'
 import {
   actionButtonView,
@@ -25,14 +27,20 @@ const makeYourOwnLinkView = (h: HtmlBuilder<Message>): Html =>
   )
 
 const loadErrorView = (error: LoadError, h: HtmlBuilder<Message>): Html =>
-  h.p(
+  h.div(
     [h.Class('py-20 text-center text-lg')],
     [
-      Match.value(error).pipe(
-        Match.when('NotFound', () => "This poster doesn't exist. "),
-        Match.when('Unavailable', () => "Couldn't load this poster. "),
-        Match.exhaustive,
+      h.h1(
+        [h.Class('inline font-normal')],
+        [
+          Match.value(error).pipe(
+            Match.when('NotFound', () => "This poster doesn't exist."),
+            Match.when('Unavailable', () => "Couldn't load this poster."),
+            Match.exhaustive,
+          ),
+        ],
       ),
+      ' ',
       h.a(
         [h.Href(editorRouter()), h.Class('font-semibold underline')],
         ['Make your own'],
@@ -55,21 +63,24 @@ const loadedView = (model: Model, grid: Grid, h: HtmlBuilder<Message>): Html =>
           },
           h,
         ),
-        actionButtonView(
-          {
-            label: 'Download PNG',
-            onClick: Message.ClickedDownloadPng(),
+        h.submodel({
+          slotId: 'poster-download',
+          model: model.posterDownload,
+          view: PosterDownload.view,
+          viewInputs: {
+            filename: Poster.posterFilename(grid),
             isPrimary: true,
-            isBusy: model.imageExport._tag === 'Exporting',
             isDisabled: false,
           },
-          h,
-        ),
+          toParentMessage: message =>
+            Message.GotPosterDownloadMessage({ message }),
+        }),
       ],
-      maybeNotice:
-        model.imageExport._tag === 'Failed'
-          ? Option.some(errorNoticeView(model.imageExport.error, h))
-          : Option.none(),
+      notices: Array.fromOption(
+        Option.map(PosterDownload.maybeError(model.posterDownload), error =>
+          errorNoticeView(error, h),
+        ),
+      ),
       content: posterFrameView(
         posterView(
           {
@@ -87,18 +98,18 @@ const loadedView = (model: Model, grid: Grid, h: HtmlBuilder<Message>): Html =>
     h,
   )
 
-const emptyPageView = (h: HtmlBuilder<Message>): Html =>
-  pageView({ toolbar: [], maybeNotice: Option.none(), content: h.empty }, h)
+const loadingView = (h: HtmlBuilder<Message>): Html =>
+  pageView({ toolbar: [], notices: [], content: h.empty }, h)
 
 export const view = Submodel.defineView<Model, Message>((model, h) =>
   AsyncData.matchDataSplitEmpty(model.grid, {
-    onIdle: () => emptyPageView(h),
-    onLoading: () => emptyPageView(h),
+    onIdle: () => loadingView(h),
+    onLoading: () => loadingView(h),
     onFailure: error =>
       pageView(
         {
           toolbar: [],
-          maybeNotice: Option.none(),
+          notices: [],
           content: posterFrameView(loadErrorView(error, h), h),
         },
         h,

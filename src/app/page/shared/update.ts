@@ -1,76 +1,63 @@
-import { AsyncData, type Update } from 'foldkit'
+import { Option } from 'effect'
+import { AsyncData, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { posterFilename } from '../../domain/grid'
-import { ExportPoster, FetchGrid } from './command'
+import * as PosterDownload from '../../posterDownload'
+import { FetchGrid } from './command'
 import { Message, OutMessage } from './message'
-import { ExportState, GridData, Model } from './model'
+import { GridData, Model } from './model'
 
-/** A shared-poster page that has not loaded anything (another route is active). */
+type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
+
+/** A shared-poster page with nothing loaded, while another route is active. */
 export const initIdle = (): Model => ({
-  gridId: '',
+  maybeGridId: Option.none(),
   grid: GridData.Idle(),
-  imageExport: ExportState.Idle(),
+  posterDownload: PosterDownload.init(),
 })
 
 export const init = (gridId: string): Update.Return<Model, Message> => ({
   model: {
-    gridId,
+    maybeGridId: Option.some(gridId),
     grid: GridData.Loading(),
-    imageExport: ExportState.Idle(),
+    posterDownload: PosterDownload.init(),
   },
   commands: [FetchGrid({ gridId })],
 })
 
+/** Whether the page already shows (or is loading) this poster. */
+export const isShowing = (model: Model, gridId: string): boolean =>
+  Option.contains(model.maybeGridId, gridId) && !AsyncData.isFailure(model.grid)
+
+const foldPosterDownload = Update.foldChild({
+  update: PosterDownload.update,
+  read: (model: Model) => Option.some(model.posterDownload),
+  write: (model, nextPosterDownload) =>
+    modifyFields(model, { posterDownload: () => nextPosterDownload }),
+  toParentMessage: message => Message.GotPosterDownloadMessage({ message }),
+})
+
 export const update = (model: Model, message: Message) =>
-  Message.match<Update.ReturnWithOutMessage<Model, Message, OutMessage>>(
-    message,
-    {
-      SucceededFetchGrid: ({ grid }) => ({
-        model: modifyFields(model, {
-          grid: () => GridData.Success({ data: grid }),
+  Message.match<UpdateReturn>(message, {
+    SucceededFetchGrid: ({ grid }) => ({
+      model: modifyFields(model, {
+        grid: () => GridData.Success({ data: grid }),
+      }),
+    }),
+
+    FailedFetchGrid: ({ error }) => ({
+      model: modifyFields(model, { grid: () => GridData.Failure({ error }) }),
+    }),
+
+    ClickedRemix: () =>
+      Option.match(AsyncData.getData(model.grid), {
+        onNone: () => ({ model }),
+        onSome: grid => ({
+          model,
+          outMessage: OutMessage.RequestedRemix({ grid }),
         }),
       }),
 
-      FailedFetchGrid: ({ error }) => ({
-        model: modifyFields(model, { grid: () => GridData.Failure({ error }) }),
-      }),
-
-      ClickedRemix: () =>
-        AsyncData.matchDataSplitEmpty(model.grid, {
-          onIdle: () => ({ model }),
-          onLoading: () => ({ model }),
-          onFailure: () => ({ model }),
-          onData: grid => ({
-            model,
-            outMessage: OutMessage.RequestedRemix({ grid }),
-          }),
-        }),
-
-      ClickedDownloadPng: () =>
-        AsyncData.matchDataSplitEmpty(model.grid, {
-          onIdle: () => ({ model }),
-          onLoading: () => ({ model }),
-          onFailure: () => ({ model }),
-          onData: grid =>
-            model.imageExport._tag === 'Exporting'
-              ? { model }
-              : {
-                  model: modifyFields(model, {
-                    imageExport: () => ExportState.Exporting(),
-                  }),
-                  commands: [ExportPoster({ filename: posterFilename(grid) })],
-                },
-        }),
-
-      SucceededExportPoster: () => ({
-        model: modifyFields(model, { imageExport: () => ExportState.Idle() }),
-      }),
-
-      FailedExportPoster: ({ error }) => ({
-        model: modifyFields(model, {
-          imageExport: () => ExportState.Failed({ error }),
-        }),
-      }),
-    },
-  )
+    GotPosterDownloadMessage: ({ message }) =>
+      foldPosterDownload(model, message),
+  })

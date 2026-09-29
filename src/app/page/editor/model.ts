@@ -2,6 +2,7 @@ import { Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Grid } from '../../../shared/schema'
+import * as PosterDownload from '../../posterDownload'
 import * as Picker from './picker'
 
 export const Pointer = Schema.Literals(['Mouse', 'Touch'])
@@ -9,8 +10,7 @@ export type Pointer = typeof Pointer.Type
 
 /**
  * A pointer on a filled slot. `Pressing` has not moved far enough (mouse) or
- * been held long enough (touch) to count as a drag yet. `JustDropped` swallows
- * the click the browser fires when a drag is released over its own tile.
+ * been held long enough (touch) to count as a drag yet.
  */
 export const Drag = defineTaggedUnion({
   Idle: {},
@@ -30,24 +30,18 @@ export const Drag = defineTaggedUnion({
     currentY: Schema.Number,
     maybeTargetIndex: Schema.Option(Schema.Number),
   },
-  JustDropped: {},
 })
 export type Drag = typeof Drag.Type
 
+export const Clipboard = Schema.Literals(['Copying', 'Copied', 'NotCopied'])
+
+/** `generation` ties a share's result to the request that produced it. */
 export const ShareState = defineTaggedUnion({
   Idle: {},
-  Sharing: {},
-  Shared: { url: Schema.String },
+  Sharing: { generation: Schema.Number },
+  Shared: { url: Schema.String, clipboard: Clipboard },
   Failed: { error: Schema.String },
 })
-export type ShareState = typeof ShareState.Type
-
-export const ExportState = defineTaggedUnion({
-  Idle: {},
-  Exporting: {},
-  Failed: { error: Schema.String },
-})
-export type ExportState = typeof ExportState.Type
 
 export const Model = Schema.Struct({
   grid: Grid,
@@ -55,7 +49,8 @@ export const Model = Schema.Struct({
   drag: Drag,
   pressCount: Schema.Number,
   share: ShareState,
-  imageExport: ExportState,
+  shareCount: Schema.Number,
+  posterDownload: PosterDownload.Model,
   maybeAnnouncement: Schema.Option(Schema.String),
 })
 export type Model = typeof Model.Type
@@ -66,6 +61,7 @@ export const init = (grid: Grid): Model => ({
   drag: Drag.Idle(),
   pressCount: 0,
   share: ShareState.Idle(),
-  imageExport: ExportState.Idle(),
+  shareCount: 0,
+  posterDownload: PosterDownload.init(),
   maybeAnnouncement: Option.none(),
 })

@@ -3,8 +3,8 @@ import {
   Mount,
   click,
   expect,
+  expectIgnored,
   given,
-  inside,
   keydown,
   label,
   role,
@@ -16,7 +16,7 @@ import { describe, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import * as GridDomain from '../../domain/grid'
+import * as Poster from '../../domain/poster'
 import { twoItemGrid, zelda, zeldaResult } from '../../fixture'
 import { CopyShareUrl, FocusSlot, SaveDraft, ShareGrid } from './command'
 import { Message } from './message'
@@ -37,9 +37,10 @@ describe('editor', () => {
   test('an empty poster offers four slots and disables sharing', () => {
     scene(
       { update, view },
-      given(init(GridDomain.empty())),
+      given(init(Poster.empty())),
       expect(role('heading', { name: 'My Core Four' })).toExist(),
       expect(text('0 / 4 picked')).toExist(),
+      expect(role('button', { name: 'Add a game to slot 4' })).toExist(),
       expect(role('button', { name: 'Share link' })).toBeDisabled(),
       expect(role('button', { name: 'Download PNG' })).toBeDisabled(),
       expect(role('combobox', { name: 'Poster subtitle' })).toHaveValue(
@@ -51,7 +52,7 @@ describe('editor', () => {
   test('picking a game from search fills the slot', () => {
     scene(
       { update, view },
-      given(init(GridDomain.empty())),
+      given(init(Poster.empty())),
       click(role('button', { name: 'Add a game to slot 1' })),
       Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
       resolveDialogResources,
@@ -67,7 +68,6 @@ describe('editor', () => {
           results: [zeldaResult],
         }),
       ),
-      expect(text('1998 · N64, Wii, 3DS, WiiU +2')).toExist(),
       click(role('button', { name: new RegExp(zelda.name) })),
       Command.resolve(
         Dialog.CloseDialog,
@@ -98,27 +98,36 @@ describe('editor', () => {
       keydown(role('button', { name: `Change ${zelda.name}` }), 'ArrowRight', {
         shiftKey: true,
       }),
+      expect(text(`Moved ${zelda.name} to position 2`)).toExist(),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
       Command.resolve(FocusSlot, Message.CompletedFocusSlot()),
-      expect(text(`Moved ${zelda.name} to position 2`)).toExist(),
     )
   })
 
-  test('sharing shows the copied link', () => {
+  test('an arrow key without Shift is left to the browser', () => {
+    scene(
+      { update, view },
+      given(init(twoItemGrid)),
+      keydown(role('button', { name: `Change ${zelda.name}` }), 'ArrowRight'),
+      expectIgnored(),
+    )
+  })
+
+  test('sharing shows the link once it is copied', () => {
     scene(
       { update, view },
       given(init(twoItemGrid)),
       click(role('button', { name: 'Share link' })),
       Command.resolve(
         ShareGrid,
-        Message.SucceededShareGrid({ url: SHARE_URL }),
+        Message.SucceededShareGrid({ generation: 1, url: SHARE_URL }),
       ),
-      Command.resolve(CopyShareUrl, Message.CompletedCopyShareUrl()),
-      inside(
-        role('status'),
-        expect(text('Link copied:', { exact: false })).toExist(),
-        expect(role('link', { name: SHARE_URL })).toExist(),
+      Command.resolve(
+        CopyShareUrl,
+        Message.SucceededCopyShareUrl({ url: SHARE_URL }),
       ),
+      expect(role('status')).toContainText('Link copied:'),
+      expect(role('link', { name: SHARE_URL })).toExist(),
     )
   })
 
@@ -130,10 +139,13 @@ describe('editor', () => {
       Command.resolve(
         ShareGrid,
         Message.FailedShareGrid({
+          generation: 1,
           error: 'Sharing is busy right now. Try again later.',
         }),
       ),
-      expect(text('Sharing is busy right now. Try again later.')).toExist(),
+      expect(role('status')).toHaveText(
+        'Sharing is busy right now. Try again later.',
+      ),
     )
   })
 })

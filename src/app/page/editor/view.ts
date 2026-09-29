@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Array, Match, Option } from 'effect'
+import { Array, Option, Record } from 'effect'
 import { Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
@@ -7,7 +7,8 @@ import { Button, Select } from '@foldkit/ui'
 
 import { CATEGORIES } from '../../../shared/catalog'
 import { GRID_SIZE, type Item } from '../../../shared/schema'
-import * as GridDomain from '../../domain/grid'
+import * as Poster from '../../domain/poster'
+import * as PosterDownload from '../../posterDownload'
 import {
   actionButtonView,
   errorNoticeView,
@@ -16,22 +17,24 @@ import {
 } from '../../view/layout'
 import {
   coverImageView,
-  exportIgnore,
+  downloadIgnore,
   filledTileView,
   posterView,
   subtitleText,
 } from '../../view/poster'
 import { slotButtonId } from './command'
 import { Message } from './message'
-import { Drag, Model, type Pointer } from './model'
+import { Drag, Model, type Pointer, ShareState } from './model'
 import * as Picker from './picker'
 import { SLOT_INDEX_ATTRIBUTE } from './subscription'
 
 const PRIMARY_MOUSE_BUTTON = 0
 
+const MOVE_HINT_ID = 'slot-move-hint'
+
 const TARGET_RING_CLASS = 'ring-[0.9cqw] ring-amber-400 ring-offset-2'
 
-const MOVE_KEYS: Readonly<Record<string, GridDomain.MoveDirection>> = {
+const MOVE_KEYS: Readonly<Record<string, Poster.MoveDirection>> = {
   ArrowUp: 'Up',
   ArrowDown: 'Down',
   ArrowLeft: 'Left',
@@ -57,7 +60,9 @@ const slotDragState = (drag: Drag, slotIndex: number): SlotDragState =>
         maybeTargetIndex,
       }) => ({
         isDragged: draggedIndex === slotIndex,
-        isDropTarget: Option.contains(maybeTargetIndex, slotIndex),
+        isDropTarget:
+          draggedIndex !== slotIndex &&
+          Option.contains(maybeTargetIndex, slotIndex),
         maybeOffset: Option.liftPredicate(
           { x: currentX - originX, y: currentY - originY },
           () => draggedIndex === slotIndex,
@@ -80,13 +85,10 @@ const toMaybeMoveMessage =
     key: string,
     { shiftKey }: Readonly<{ shiftKey: boolean }>,
   ): Option.Option<Message> =>
-    shiftKey
-      ? Option.map(Option.fromNullishOr(MOVE_KEYS[key]), direction =>
-          Message.PressedMoveKey({ slotIndex, direction }),
-        )
-      : Option.none()
-
-// VIEW
+    Record.get(MOVE_KEYS, key).pipe(
+      Option.filter(() => shiftKey),
+      Option.map(direction => Message.PressedMoveKey({ slotIndex, direction })),
+    )
 
 const subtitlePickerView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Select.view(
@@ -105,7 +107,7 @@ const subtitlePickerView = (model: Model, h: HtmlBuilder<Message>): Html =>
             h.span([h.Class('truncate')], [subtitleText(model.grid)]),
             h.span(
               [
-                exportIgnore(h),
+                downloadIgnore(h),
                 h.AriaHidden(true),
                 h.Class('text-[2cqw] opacity-60'),
               ],
@@ -114,7 +116,7 @@ const subtitlePickerView = (model: Model, h: HtmlBuilder<Message>): Html =>
             h.select(
               [
                 ...attributes.select,
-                exportIgnore(h),
+                downloadIgnore(h),
                 h.AriaLabel('Poster subtitle'),
                 h.Class('absolute inset-0 cursor-pointer opacity-0'),
               ],
@@ -143,9 +145,11 @@ const pickButtonView = (
             ...attributes.button,
             h.Id(slotButtonId(slotIndex)),
             h.AriaLabel(`Change ${item.name}`),
-            h.AriaDescription('Shift and arrow keys move it'),
+            h.AriaDescribedBy(MOVE_HINT_ID),
             h.OnKeyDownPreventDefault(toMaybeMoveMessage(slotIndex)),
-            h.Class('block size-full cursor-[inherit]'),
+            h.Class(
+              'block size-full cursor-[inherit] outline-none focus-visible:ring-[0.8cqw] focus-visible:ring-amber-400 focus-visible:ring-inset',
+            ),
           ],
           [coverImageView(item, h)],
         ),
@@ -165,7 +169,7 @@ const removeButtonView = (
         h.button(
           [
             ...attributes.button,
-            exportIgnore(h),
+            downloadIgnore(h),
             h.AriaLabel(`Remove ${item.name}`),
             h.Class(
               'absolute top-[1.5cqw] right-[1.5cqw] flex size-[5.5cqw] cursor-pointer items-center justify-center rounded-full bg-black/60 text-[3.2cqw] text-white opacity-0 transition group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100',
@@ -177,6 +181,11 @@ const removeButtonView = (
     h,
   )
 
+// NOTE: drag-to-swap is hand-rolled rather than @foldkit/ui DragAndDrop:
+// that component reorders by insertion along one axis and activates on a
+// distance threshold only, while this poster swaps slots in a 2×2 grid and
+// needs a touch long-press so the page still scrolls. Keyboard users get
+// Shift+arrow moves instead of DragAndDrop's keyboard mode.
 const filledSlotView = (
   item: Item,
   slotIndex: number,
@@ -185,7 +194,7 @@ const filledSlotView = (
 ): Html =>
   h.div(
     [
-      h.DataAttribute(SLOT_INDEX_ATTRIBUTE, globalThis.String(slotIndex)),
+      h.DataAttribute(SLOT_INDEX_ATTRIBUTE, `${slotIndex}`),
       h.OnPointerDown(
         (
           pointerType,
@@ -218,7 +227,7 @@ const filledSlotView = (
         clsx(
           'group relative touch-manipulation rounded-[2.6cqw] select-none [-webkit-touch-callout:none]',
           {
-            'z-10 cursor-grabbing shadow-2xl': isDragged,
+            'pointer-events-none z-10 shadow-2xl': isDragged,
             'cursor-grab': !isDragged,
             [TARGET_RING_CLASS]: isDropTarget,
           },
@@ -246,7 +255,7 @@ const emptySlotView = (
             ...attributes.button,
             h.Id(slotButtonId(slotIndex)),
             h.AriaLabel(`Add a ${noun} to slot ${slotIndex + 1}`),
-            h.DataAttribute(SLOT_INDEX_ATTRIBUTE, globalThis.String(slotIndex)),
+            h.DataAttribute(SLOT_INDEX_ATTRIBUTE, `${slotIndex}`),
             h.Class(
               clsx(
                 'flex aspect-[5/7] cursor-pointer flex-col items-center justify-center gap-[1.5cqw] rounded-[2.6cqw] border-[0.5cqw] border-dashed border-ink/25 bg-white/40 text-ink/50 transition hover:border-ink/50 hover:bg-white/60 hover:text-ink/80',
@@ -288,41 +297,49 @@ const slotView = (
   })
 }
 
-const noticeView = (
+const shareLinkNoticeView = (
+  url: string,
+  isCopied: boolean,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.p(
+    [],
+    [
+      isCopied ? 'Link copied: ' : 'Share link: ',
+      h.a([h.Href(url), h.Class('font-semibold break-all underline')], [url]),
+    ],
+  )
+
+const shareNoticeView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): Option.Option<Html> =>
-  Match.value(model).pipe(
-    Match.withReturnType<Option.Option<Html>>(),
-    Match.when({ share: { _tag: 'Shared' } }, ({ share: { url } }) =>
-      Option.some(
-        h.span(
-          [],
-          [
-            'Link copied: ',
-            h.a(
-              [h.Href(url), h.Class('font-semibold break-all underline')],
-              [url],
-            ),
-          ],
-        ),
-      ),
-    ),
-    Match.when({ share: { _tag: 'Failed' } }, ({ share: { error } }) =>
-      Option.some(errorNoticeView(error, h)),
-    ),
-    Match.when(
-      { imageExport: { _tag: 'Failed' } },
-      ({ imageExport: { error } }) => Option.some(errorNoticeView(error, h)),
-    ),
-    Match.orElse(() => Option.none()),
+  ShareState.matchOrElse<Option.Option<Html>>(
+    model.share,
+    {
+      Shared: ({ url, clipboard }) =>
+        Option.some(shareLinkNoticeView(url, clipboard === 'Copied', h)),
+      Failed: ({ error }) => Option.some(errorNoticeView(error, h)),
+    },
+    () => Option.none(),
   )
+
+const noticesView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  Array.getSomes([
+    shareNoticeView(model, h),
+    Option.map(PosterDownload.maybeError(model.posterDownload), error =>
+      errorNoticeView(error, h),
+    ),
+  ])
 
 const toolbarView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> => {
-  const filledCount = GridDomain.filledCount(model.grid)
+  const filledCount = Poster.filledCount(model.grid)
   const isEmpty = filledCount === 0
   return [
     h.span(
@@ -339,16 +356,17 @@ const toolbarView = (
       },
       h,
     ),
-    actionButtonView(
-      {
-        label: 'Download PNG',
-        onClick: Message.ClickedDownloadPng(),
+    h.submodel({
+      slotId: 'poster-download',
+      model: model.posterDownload,
+      view: PosterDownload.view,
+      viewInputs: {
+        filename: Poster.posterFilename(model.grid),
         isPrimary: false,
-        isBusy: model.imageExport._tag === 'Exporting',
         isDisabled: isEmpty,
       },
-      h,
-    ),
+      toParentMessage: message => Message.GotPosterDownloadMessage({ message }),
+    }),
     actionButtonView(
       {
         label: 'Share link',
@@ -366,7 +384,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
   pageView(
     {
       toolbar: toolbarView(model, h),
-      maybeNotice: noticeView(model, h),
+      notices: noticesView(model, h),
       content: h.div(
         [h.Class('w-full')],
         [
@@ -382,6 +400,10 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
               h,
             ),
             h,
+          ),
+          h.p(
+            [h.Id(MOVE_HINT_ID), h.Class('sr-only')],
+            ['Shift and arrow keys move it to a neighboring slot.'],
           ),
           h.div(
             [h.AriaLive('polite'), h.Class('sr-only')],

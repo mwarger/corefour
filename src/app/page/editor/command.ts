@@ -2,15 +2,15 @@ import { Array, Duration, Effect, Option, Schema, pipe } from 'effect'
 import { Command, Dom } from 'foldkit'
 
 import { Grid, ShareRequest } from '../../../shared/schema'
-import { shareGrid } from '../../resource/api'
+import { ApiError, shareGrid } from '../../resource/api'
 import { saveDraft } from '../../resource/draftStorage'
-import { exportPosterPng } from '../../resource/posterImage'
 import { getTurnstileToken } from '../../resource/turnstile'
 import { sharedRouter } from '../../route'
-import { POSTER_ELEMENT_ID } from '../../view/poster'
 import { Message } from './message'
 
 const LONG_PRESS = Duration.millis(250)
+
+const INVALID_POSTER = "This poster can't be shared. Try starting over."
 
 export const slotButtonId = (slotIndex: number): string =>
   `slot-button-${slotIndex}`
@@ -25,52 +25,42 @@ export const SaveDraft = Command.define('SaveDraft', {
     ),
 })
 
-export const ExportPoster = Command.define('ExportPoster', {
-  args: { filename: Schema.String },
-  messages: [Message.SucceededExportPoster, Message.FailedExportPoster],
-  execute: ({ filename }) =>
-    exportPosterPng(POSTER_ELEMENT_ID, filename).pipe(
-      Effect.as(Message.SucceededExportPoster()),
-      Effect.catch(({ message }) =>
-        Effect.succeed(Message.FailedExportPoster({ error: message })),
-      ),
+const shareRequestFor = (grid: Grid, turnstileToken: string) =>
+  ShareRequest.makeEffect({
+    category: grid.category,
+    subtitle: grid.subtitle,
+    theme: grid.theme,
+    items: Array.map(
+      grid.items,
+      Option.map(({ source, id }) => ({ source, id })),
     ),
-})
+    turnstileToken,
+  }).pipe(Effect.mapError(() => new ApiError({ message: INVALID_POSTER })))
 
 export const ShareGrid = Command.define('ShareGrid', {
-  args: { grid: Grid },
+  args: { grid: Grid, generation: Schema.Number },
   messages: [Message.SucceededShareGrid, Message.FailedShareGrid],
-  execute: ({ grid }) =>
+  execute: ({ grid, generation }) =>
     Effect.gen(function* () {
       const turnstileToken = yield* getTurnstileToken
-      const id = yield* shareGrid(
-        ShareRequest.make({
-          category: grid.category,
-          subtitle: grid.subtitle,
-          theme: grid.theme,
-          items: Array.map(
-            grid.items,
-            Option.map(({ source, id }) => ({ source, id })),
-          ),
-          turnstileToken,
-        }),
-      )
+      const request = yield* shareRequestFor(grid, turnstileToken)
+      const id = yield* shareGrid(request)
       const url = new URL(sharedRouter({ id }), window.location.origin).href
-      return Message.SucceededShareGrid({ url })
+      return Message.SucceededShareGrid({ generation, url })
     }).pipe(
       Effect.catch(({ message }) =>
-        Effect.succeed(Message.FailedShareGrid({ error: message })),
+        Effect.succeed(Message.FailedShareGrid({ generation, error: message })),
       ),
     ),
 })
 
 export const CopyShareUrl = Command.define('CopyShareUrl', {
   args: { url: Schema.String },
-  messages: [Message.CompletedCopyShareUrl],
+  messages: [Message.SucceededCopyShareUrl, Message.FailedCopyShareUrl],
   execute: ({ url }) =>
     Effect.tryPromise(() => navigator.clipboard.writeText(url)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedCopyShareUrl()),
+      Effect.as(Message.SucceededCopyShareUrl({ url })),
+      Effect.catch(() => Effect.succeed(Message.FailedCopyShareUrl({ url }))),
     ),
 })
 

@@ -8,23 +8,22 @@ import {
   model,
   story,
 } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
+import type { SearchResult } from '../../../../shared/schema'
 import { zeldaRemakeResult, zeldaResult } from '../../../fixture'
 import { SearchItems, WaitBeforeSearch } from './command'
 import { Message, OutMessage } from './message'
-import { type Model, SearchResultsData, init } from './model'
+import { SearchResultsData, init } from './model'
 import { update } from './update'
 
-const withResults = (
-  query: string,
-  results: ReadonlyArray<typeof zeldaResult>,
-): Model => ({
-  ...init(),
-  query,
-  slotIndex: 2,
-  results: SearchResultsData.Success({ data: results }),
-})
+const withResults = (query: string, results: ReadonlyArray<SearchResult>) =>
+  modifyFields(init(), {
+    query: () => query,
+    slotIndex: () => 2,
+    results: () => SearchResultsData.Success({ data: results }),
+  })
 
 test('typing searches once the pause is over and shows the results', () => {
   story(
@@ -54,16 +53,17 @@ test('typing searches once the pause is over and shows the results', () => {
 })
 
 test('a pause from an earlier keystroke does not search', () => {
-  const typedTwice = update(
-    update(init(), Message.UpdatedQuery({ value: 'oc' })).model,
-    Message.UpdatedQuery({ value: 'oca' }),
+  story(
+    update,
+    given(
+      modifyFields(init(), {
+        query: () => 'oca',
+        searchGeneration: () => 2,
+      }),
+    ),
+    message(Message.CompletedWaitBeforeSearch({ generation: 1 })),
+    Command.expectNone(),
   )
-  const stalePause = update(
-    typedTwice.model,
-    Message.CompletedWaitBeforeSearch({ generation: 1 }),
-  )
-
-  expect(stalePause.commands ?? []).toHaveLength(0)
 })
 
 test('queries shorter than two characters clear results without searching', () => {

@@ -10,5 +10,5 @@ export const subscriptions = Subscription.lift(Editor.subscriptions)<
 >({
   toChildModel: model => model.editor,
   toParentMessage: message => Message.GotEditorMessage({ message }),
-  when: ({ route }) => route._tag !== 'Shared',
+  when: ({ route }) => route._tag === 'Editor',
 })

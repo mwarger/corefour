@@ -1,17 +1,17 @@
 import clsx from 'clsx'
-import { Option } from 'effect'
+import { Array } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
 export type PageConfig = Readonly<{
   toolbar: ReadonlyArray<Html>
-  maybeNotice: Option.Option<Html>
+  notices: ReadonlyArray<Html>
   content: Html
 }>
 
 export const pageView = <Message>(
-  { toolbar, maybeNotice, content }: PageConfig,
+  { toolbar, notices, content }: PageConfig,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.main(
@@ -29,17 +29,20 @@ export const pageView = <Message>(
         ],
         toolbar,
       ),
-      Option.match(maybeNotice, {
-        onNone: () => h.empty,
-        onSome: notice =>
-          h.p(
-            [
-              h.Role('status'),
-              h.Class('w-full rounded-xl bg-cream px-4 py-2 text-sm text-ink'),
-            ],
-            [notice],
+      // NOTE: the status region stays mounted even when empty, since screen
+      // readers announce changes to live regions that already exist.
+      h.div(
+        [
+          h.Role('status'),
+          h.Class(
+            clsx('w-full', {
+              'flex flex-col gap-1 rounded-xl bg-cream px-4 py-2 text-sm text-ink':
+                Array.isReadonlyArrayNonEmpty(notices),
+            }),
           ),
-      }),
+        ],
+        notices,
+      ),
       content,
     ],
   )
@@ -84,6 +87,7 @@ export const actionButtonView = <Message>(
           [
             ...attributes.button,
             h.AriaBusy(isBusy),
+            h.AriaLabel(label),
             h.Class(
               clsx(
                 'cursor-pointer rounded-full px-4 py-1.5 font-semibold transition data-[disabled]:cursor-default data-[disabled]:opacity-40',
@@ -103,4 +107,4 @@ export const actionButtonView = <Message>(
 export const errorNoticeView = <Message>(
   message: string,
   h: HtmlBuilder<Message>,
-): Html => h.span([h.Class('text-red-800')], [message])
+): Html => h.p([h.Class('text-red-800')], [message])

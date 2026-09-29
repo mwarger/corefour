@@ -3,7 +3,6 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { fromString } from 'foldkit/url'
 import { expect, test } from 'vitest'
 
-import * as GridDomain from './domain/grid'
 import { twoItemGrid } from './fixture'
 import { init } from './main'
 import { Message } from './message'
@@ -15,12 +14,14 @@ import { NavigateInternal, update } from './update'
 const url = (path: string) =>
   Option.getOrThrow(fromString(`http://localhost${path}`))
 
+const noDraft = { maybeDraft: Option.none() }
+
 test('opening a share link starts loading that poster', () => {
-  const init_ = init({ maybeDraft: Option.none() }, url('/g/abc1234567'))
+  const init_ = init(noDraft, url('/g/abc1234567'))
 
   expect(init_.model.route).toEqual({ _tag: 'Shared', id: 'abc1234567' })
-  expect(init_.model.shared.gridId).toBe('abc1234567')
-  expect(init_.commands ?? []).toHaveLength(1)
+  expect(init_.model.shared.maybeGridId).toEqual(Option.some('abc1234567'))
+  expect(init_.commands?.map(({ name }) => name)).toEqual([FetchGrid.name])
 })
 
 test('the editor starts from the saved draft', () => {
@@ -33,9 +34,7 @@ test('the editor starts from the saved draft', () => {
 test('remixing a shared poster loads it into the editor and goes there', () => {
   story(
     update,
-    given({
-      ...init({ maybeDraft: Option.none() }, url('/g/abc1234567')).model,
-    }),
+    given(init(noDraft, url('/g/abc1234567')).model),
     message(
       Message.GotSharedMessage({
         message: Shared.Message.SucceededFetchGrid({ grid: twoItemGrid }),
@@ -52,7 +51,7 @@ test('remixing a shared poster loads it into the editor and goes there', () => {
     message(Message.ChangedUrl({ url: url('/') })),
     model(({ route, editor }) => {
       expect(route._tag).toBe('Editor')
-      expect(editor.grid).not.toEqual(GridDomain.empty())
+      expect(editor.grid).toEqual(twoItemGrid)
     }),
   )
 })
@@ -60,7 +59,7 @@ test('remixing a shared poster loads it into the editor and goes there', () => {
 test('navigating to a different shared poster loads it', () => {
   story(
     update,
-    given(init({ maybeDraft: Option.none() }, url('/')).model),
+    given(init(noDraft, url('/')).model),
     message(Message.ChangedUrl({ url: url('/g/zzz9999999') })),
     model(({ route, shared }) => {
       expect(route).toEqual({ _tag: 'Shared', id: 'zzz9999999' })
@@ -70,5 +69,20 @@ test('navigating to a different shared poster loads it', () => {
       FetchGrid,
       Shared.Message.FailedFetchGrid({ error: 'NotFound' }),
     ),
+  )
+})
+
+test('returning to the poster already on screen does not reload it', () => {
+  story(
+    update,
+    given(init(noDraft, url('/g/abc1234567')).model),
+    message(
+      Message.GotSharedMessage({
+        message: Shared.Message.SucceededFetchGrid({ grid: twoItemGrid }),
+      }),
+    ),
+    message(Message.ChangedUrl({ url: url('/') })),
+    message(Message.ChangedUrl({ url: url('/g/abc1234567') })),
+    Command.expectNone(),
   )
 })

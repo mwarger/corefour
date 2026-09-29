@@ -7,66 +7,56 @@ import { Drag, type Model } from './model'
 /** Data attribute carrying a slot's index, used to find the slot under the pointer. */
 export const SLOT_INDEX_ATTRIBUTE = 'slot-index'
 
-// NOTE: the dragged tile follows the pointer, so it is the topmost element
-// under it. Hit-testing skips it and reports the slot beneath.
+// NOTE: the dragged tile has `pointer-events: none`, so hit-testing sees the
+// slot beneath it and the browser's post-drop click never reaches the tile.
 const slotIndexUnderPointer = (
   clientX: number,
   clientY: number,
-  draggedIndex: number,
 ): Option.Option<number> =>
   pipe(
     document.elementsFromPoint(clientX, clientY),
-    Array.fromIterable,
     Array.map(element =>
       Option.fromNullishOr(
         element.getAttribute(`data-${SLOT_INDEX_ATTRIBUTE}`),
       ),
     ),
     Array.getSomes,
-    Array.map(globalThis.Number),
-    Array.findFirst(index => index !== draggedIndex),
+    Array.head,
+    Option.map(globalThis.Number),
   )
 
-const activeSlotIndex = (drag: Drag): Option.Option<number> =>
-  Drag.match(drag, {
-    Idle: () => Option.none(),
-    Pressing: ({ slotIndex }) => Option.some(slotIndex),
-    Dragging: ({ slotIndex }) => Option.some(slotIndex),
-    JustDropped: () => Option.none(),
-  })
+const isPointerDown = (drag: Drag): boolean =>
+  Drag.isAnyOf(['Pressing', 'Dragging'])(drag)
 
-const isTouchDragging = (drag: Drag): boolean =>
+const isDraggingByTouch = (drag: Drag): boolean =>
   drag._tag === 'Dragging' && drag.pointer === 'Touch'
 
-const pointerStream = (draggedIndex: number): Stream.Stream<Message> =>
-  Stream.merge(
-    Stream.merge(
-      Subscription.fromEvent({
-        target: document,
-        type: 'pointermove',
-        mapEvent: ({ clientX, clientY }) =>
-          Message.MovedPointer({
-            clientX,
-            clientY,
-            maybeTargetIndex: slotIndexUnderPointer(
-              clientX,
-              clientY,
-              draggedIndex,
-            ),
-          }),
+const pointerEvents: ReadonlyArray<Stream.Stream<Message>> = [
+  Subscription.fromEvent({
+    target: document,
+    type: 'pointermove',
+    mapEvent: ({ clientX, clientY }) =>
+      Message.MovedPointer({
+        clientX,
+        clientY,
+        maybeTargetIndex: slotIndexUnderPointer(clientX, clientY),
       }),
-      Subscription.fromEvent({
-        target: document,
-        type: 'pointerup',
-        mapEvent: () => Message.ReleasedPointer(),
-      }),
-    ),
-    Subscription.fromEvent({
-      target: document,
-      type: 'pointercancel',
-      mapEvent: () => Message.CancelledPointer(),
-    }),
-  )
+  }),
+  Subscription.fromEvent({
+    target: document,
+    type: 'pointerup',
+    mapEvent: () => Message.ReleasedPointer(),
+  }),
+  Subscription.fromEvent({
+    target: document,
+    type: 'pointercancel',
+    mapEvent: () => Message.CancelledPointer(),
+  }),
+]
+
+const pointerStream: Stream.Stream<Message> = Stream.mergeAll(pointerEvents, {
+  concurrency: 'unbounded',
+})
 
 // NOTE: once a long press turns into a drag, cancelling touchmove stops the
 // page from scrolling under the finger. It emits nothing; pointermove above
@@ -83,7 +73,7 @@ const touchScrollLockStream: Stream.Stream<Message> =
   })
 
 // NOTE: keeps the grabbing cursor and prevents text selection anywhere on the
-// page while a tile is being dragged.
+// page while a tile is being dragged, the same way @foldkit/ui DragAndDrop does.
 const dragDocumentStyles: Stream.Stream<Message> = Stream.callback(() =>
   Effect.acquireRelease(
     Effect.sync(() => {
@@ -99,29 +89,27 @@ const dragDocumentStyles: Stream.Stream<Message> = Stream.callback(() =>
 
 export const subscriptions = Subscription.make<Model, Message>()(entry => ({
   pointerTracking: entry(
-    { maybeDraggedIndex: Schema.Option(Schema.Number) },
+    { isTracking: Schema.Boolean },
     {
-      modelToDependencies: model => ({
-        maybeDraggedIndex: activeSlotIndex(model.drag),
-      }),
-      dependenciesToStream: ({ maybeDraggedIndex }) =>
-        Option.match(maybeDraggedIndex, {
-          onNone: () => Stream.empty,
-          onSome: pointerStream,
-        }),
+      modelToDependencies: model => ({ isTracking: isPointerDown(model.drag) }),
+      dependenciesToStream: ({ isTracking }) =>
+        Stream.when(
+          pointerStream,
+          Effect.sync(() => isTracking),
+        ),
     },
   ),
 
   touchScrollLock: entry(
-    { isTouchDragging: Schema.Boolean },
+    { isLocked: Schema.Boolean },
     {
       modelToDependencies: model => ({
-        isTouchDragging: isTouchDragging(model.drag),
+        isLocked: isDraggingByTouch(model.drag),
       }),
-      dependenciesToStream: ({ isTouchDragging }) =>
+      dependenciesToStream: ({ isLocked }) =>
         Stream.when(
           touchScrollLockStream,
-          Effect.sync(() => isTouchDragging),
+          Effect.sync(() => isLocked),
         ),
     },
   ),

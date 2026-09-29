@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Array, Option, pipe } from 'effect'
+import { Array, Option, String, pipe } from 'effect'
 import { AsyncData, Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
@@ -14,7 +14,7 @@ import { DIALOG_ID, Model, SEARCH_INPUT_ID } from './model'
 const MAX_PLATFORMS = 4
 
 /** e.g. "1998 · Remake · N64, 3DS, Switch +2" */
-export const resultDetails = ({
+const resultDetails = ({
   maybeYear,
   maybeKind,
   platforms,
@@ -26,21 +26,21 @@ export const resultDetails = ({
   const hiddenCount = platforms.length - MAX_PLATFORMS
   const platformText = Option.liftPredicate(
     hiddenCount > 0 ? `${shownPlatforms} +${hiddenCount}` : shownPlatforms,
-    text => text.length > 0,
+    String.isNonEmpty,
   )
   return pipe(
-    [Option.map(maybeYear, globalThis.String), maybeKind, platformText],
+    [Option.map(maybeYear, year => `${year}`), maybeKind, platformText],
     Array.getSomes,
     Array.join(' · '),
   )
 }
 
-const statusItemView = (
+const statusView = (
   text: string,
   isError: boolean,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.li(
+  h.p(
     [
       h.Role(isError ? 'alert' : 'status'),
       h.Class(
@@ -66,7 +66,7 @@ const resultItemView = (result: SearchResult, h: HtmlBuilder<Message>): Html =>
               [
                 ...attributes.button,
                 h.Class(
-                  'flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left hover:bg-ink/5 focus:bg-ink/5 focus:outline-none',
+                  'flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left outline-none hover:bg-ink/5 focus-visible:bg-ink/5 focus-visible:ring-2 focus-visible:ring-ink/40',
                 ),
               ],
               [
@@ -97,27 +97,32 @@ const resultItemView = (result: SearchResult, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const resultItemsView = (
+const resultListView = (
   results: ReadonlyArray<SearchResult>,
   h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> =>
-  Array.map(results, result => resultItemView(result, h))
+): Html =>
+  h.ul(
+    [h.Class('p-2')],
+    Array.map(results, result => resultItemView(result, h)),
+  )
 
 const resultsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.ul(
-    [h.Class('overflow-y-auto p-2')],
-    AsyncData.match(model.results, {
-      onIdle: () => [],
-      onLoading: () => [statusItemView('Searching…', false, h)],
-      onRefreshing: results => resultItemsView(results, h),
-      onFailure: error => [statusItemView(error, true, h)],
-      onStale: ({ data }) => resultItemsView(data, h),
-      onSuccess: results =>
-        Array.match(results, {
-          onEmpty: () => [statusItemView('Nothing found.', false, h)],
-          onNonEmpty: nonEmptyResults => resultItemsView(nonEmptyResults, h),
-        }),
-    }),
+  h.div(
+    [h.Class('overflow-y-auto')],
+    [
+      AsyncData.match(model.results, {
+        onIdle: () => h.empty,
+        onLoading: () => statusView('Searching…', false, h),
+        onRefreshing: results => resultListView(results, h),
+        onFailure: error => statusView(error, true, h),
+        onStale: ({ data }) => resultListView(data, h),
+        onSuccess: results =>
+          Array.match(results, {
+            onEmpty: () => statusView('Nothing found.', false, h),
+            onNonEmpty: nonEmptyResults => resultListView(nonEmptyResults, h),
+          }),
+      }),
+    ],
   )
 
 const searchFormView = (

@@ -49,24 +49,33 @@ export const filledCount = (grid: Grid): number =>
 
 export const isEmpty = (grid: Grid): boolean => filledCount(grid) === 0
 
+const isInGrid = (index: number): boolean => index >= 0 && index < GRID_SIZE
+
 /** The slot a keyboard move lands on in the 2×2 grid, if there is one. */
 export const neighborIndex = (
   index: number,
   direction: MoveDirection,
 ): Option.Option<number> => {
-  const column = index % COLUMN_COUNT
-  const target = Match.value(direction).pipe(
-    Match.when('Left', () => (column > 0 ? index - 1 : -1)),
-    Match.when('Right', () => (column < COLUMN_COUNT - 1 ? index + 1 : -1)),
-    Match.when('Up', () => index - COLUMN_COUNT),
-    Match.when('Down', () => index + COLUMN_COUNT),
+  const isFirstColumn = index % COLUMN_COUNT === 0
+  const isLastColumn = index % COLUMN_COUNT === COLUMN_COUNT - 1
+  return Match.value(direction).pipe(
+    Match.withReturnType<Option.Option<number>>(),
+    Match.when('Left', () =>
+      Option.liftPredicate(index - 1, () => !isFirstColumn),
+    ),
+    Match.when('Right', () =>
+      Option.liftPredicate(index + 1, () => !isLastColumn),
+    ),
+    Match.when('Up', () =>
+      Option.liftPredicate(index - COLUMN_COUNT, isInGrid),
+    ),
+    Match.when('Down', () =>
+      Option.liftPredicate(index + COLUMN_COUNT, isInGrid),
+    ),
     Match.exhaustive,
-  )
-  return Option.liftPredicate(
-    target,
-    candidate => candidate >= 0 && candidate < GRID_SIZE,
   )
 }
 
+/** The file name a downloaded poster is saved as, e.g. `my-core-four.png`. */
 export const posterFilename = (grid: Grid): string =>
   `${pipe(CATEGORIES[grid.category].title, String.toLowerCase, String.replaceAll(' ', '-'))}.png`
