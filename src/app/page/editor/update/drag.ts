@@ -3,7 +3,7 @@ import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import * as Poster from '../../../domain/poster'
-import { FocusSlot, WaitForLongPress } from '../command'
+import { WaitForLongPress } from '../command'
 import type { Message } from '../message'
 import { Drag, type Model, type Pointer } from '../model'
 import { editGrid } from './editGrid'
@@ -59,21 +59,21 @@ export const handlePressedSlot =
       return { model }
     }
 
-    const pressId = model.pressCount + 1
+    const generation = model.pressGeneration + 1
     const nextModel = modifyFields(model, {
-      pressCount: () => pressId,
+      pressGeneration: () => generation,
       drag: () =>
         Drag.Pressing({
           slotIndex,
           pointer,
-          pressId,
+          generation,
           originX: clientX,
           originY: clientY,
         }),
     })
 
     return pointer === 'Touch'
-      ? { model: nextModel, commands: [WaitForLongPress({ pressId })] }
+      ? { model: nextModel, commands: [WaitForLongPress({ generation })] }
       : { model: nextModel }
   }
 
@@ -151,12 +151,12 @@ export const handleReleasedPointer = (model: Model): UpdateReturn =>
 
 export const handleCompletedWaitForLongPress =
   (model: Model) =>
-  ({ pressId }: { pressId: number }): UpdateReturn =>
+  ({ generation }: { generation: number }): UpdateReturn =>
     Drag.matchOrElse<UpdateReturn>(
       model.drag,
       {
         Pressing: pressing =>
-          pressing.pointer === 'Touch' && pressing.pressId === pressId
+          pressing.pointer === 'Touch' && pressing.generation === generation
             ? setDrag(
                 startDragging(
                   pressing,
@@ -169,39 +169,6 @@ export const handleCompletedWaitForLongPress =
       },
       () => ({ model }),
     )
-
-const announce =
-  (maybeAnnouncement: Option.Option<string>): Update.Step<Model, Message> =>
-  model => ({
-    model: modifyFields(model, { maybeAnnouncement: () => maybeAnnouncement }),
-  })
-
-export const handlePressedMoveKey =
-  (model: Model) =>
-  ({
-    slotIndex,
-    direction,
-  }: {
-    slotIndex: number
-    direction: Poster.MoveDirection
-  }): UpdateReturn =>
-    Option.match(Poster.neighborIndex(slotIndex, direction), {
-      onNone: () => ({ model }),
-      onSome: targetIndex =>
-        Update.combine(model, [
-          editGrid(Poster.swapItems(slotIndex, targetIndex)),
-          announce(
-            Option.map(
-              Poster.itemAt(model.grid, slotIndex),
-              ({ name }) => `Moved ${name} to position ${targetIndex + 1}`,
-            ),
-          ),
-          stepModel => ({
-            model: stepModel,
-            commands: [FocusSlot({ slotIndex: targetIndex })],
-          }),
-        ]),
-    })
 
 export const handleCancelledPointer = (model: Model): UpdateReturn =>
   setDrag(Drag.Idle())(model)

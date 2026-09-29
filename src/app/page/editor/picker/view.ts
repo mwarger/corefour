@@ -106,6 +106,12 @@ const resultListView = (
     Array.map(results, result => resultItemView(result, h)),
   )
 
+const staleResultsView = (
+  error: string,
+  results: ReadonlyArray<SearchResult>,
+  h: HtmlBuilder<Message>,
+): Html => h.div([], [statusView(error, true, h), resultListView(results, h)])
+
 const resultsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('overflow-y-auto')],
@@ -115,7 +121,7 @@ const resultsView = (model: Model, h: HtmlBuilder<Message>): Html =>
         onLoading: () => statusView('Searching…', false, h),
         onRefreshing: results => resultListView(results, h),
         onFailure: error => statusView(error, true, h),
-        onStale: ({ data }) => resultListView(data, h),
+        onStale: ({ error, data }) => staleResultsView(error, data, h),
         onSuccess: results =>
           Array.match(results, {
             onEmpty: () => statusView('Nothing found.', false, h),

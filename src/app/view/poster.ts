@@ -3,12 +3,12 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { CATEGORIES, findSubtitle } from '../../shared/catalog'
 import type { Grid, Item } from '../../shared/schema'
-import { DOWNLOAD_IGNORE_ATTRIBUTE } from '../resource/posterDownload'
+import {
+  DOWNLOAD_IGNORE_ATTRIBUTE,
+  POSTER_ELEMENT_ID,
+} from '../resource/posterImage'
 
-/** The poster element saved as a PNG. One poster renders per page. */
-export const POSTER_ELEMENT_ID = 'poster'
-
-export type CoverSize = 'thumb' | 'cover'
+type CoverSize = 'thumb' | 'cover'
 
 export const coverUrl = (
   item: Pick<Item, 'source' | 'image'>,
@@ -21,7 +21,7 @@ export const subtitleText = (grid: Grid): string =>
     onSome: ({ text }) => text,
   })
 
-export type PosterConfig = Readonly<{
+type PosterConfig = Readonly<{
   grid: Grid
   subtitle: Html
   slots: ReadonlyArray<Html>

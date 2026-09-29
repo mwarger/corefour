@@ -1,4 +1,4 @@
-import { Command, Mount, expect, given, role, scene, text } from 'foldkit/scene'
+import { Mount, expect, given, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
@@ -23,6 +23,23 @@ const resolveDialogResources = Mount.resolve(
 )
 
 describe('picker', () => {
+  test('a failed refresh keeps the old results and says the search failed', () => {
+    scene(
+      { update, view },
+      given(
+        withResults(
+          SearchResultsData.Stale({
+            error: 'Search failed. Try again in a moment.',
+            data: [zeldaResult],
+          }),
+        ),
+      ),
+      resolveDialogResources,
+      expect(role('alert')).toHaveText('Search failed. Try again in a moment.'),
+      expect(text('1998 · N64, Wii, 3DS, WiiU +2')).toExist(),
+    )
+  })
+
   test('shows a searching state before the first results', () => {
     scene(
       { update, view },
@@ -68,7 +85,6 @@ describe('picker', () => {
       ),
       resolveDialogResources,
       expect(role('alert')).toHaveText('Search failed. Try again in a moment.'),
-      Command.expectNone(),
     )
   })
 })

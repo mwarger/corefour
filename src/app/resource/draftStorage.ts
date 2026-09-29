@@ -21,6 +21,7 @@ export const loadDraft: Effect.Effect<Option.Option<Grid>> = Effect.gen(
 
 export const saveDraft = (grid: Grid) =>
   Effect.gen(function* () {
+    const json = yield* Schema.encodeEffect(GridJson)(grid)
     const store = yield* KeyValueStore.KeyValueStore
-    yield* store.set(DRAFT_STORAGE_KEY, Schema.encodeSync(GridJson)(grid))
+    yield* store.set(DRAFT_STORAGE_KEY, json)
   }).pipe(Effect.provide(BrowserKeyValueStore.layerLocalStorage))

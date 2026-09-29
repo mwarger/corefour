@@ -1,40 +1,30 @@
 import clsx from 'clsx'
 import { Array, Option, Record } from 'effect'
-import { Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Select } from '@foldkit/ui'
 
-import { CATEGORIES } from '../../../shared/catalog'
-import { GRID_SIZE, type Item } from '../../../shared/schema'
-import * as Poster from '../../domain/poster'
-import * as PosterDownload from '../../posterDownload'
-import {
-  actionButtonView,
-  errorNoticeView,
-  pageView,
-  posterFrameView,
-} from '../../view/layout'
+import { CATEGORIES } from '../../../../shared/catalog'
+import type { Item } from '../../../../shared/schema'
+import * as Poster from '../../../domain/poster'
 import {
   coverImageView,
   downloadIgnore,
   filledTileView,
-  posterView,
   subtitleText,
-} from '../../view/poster'
-import { slotButtonId } from './command'
-import { Message } from './message'
-import { Drag, Model, type Pointer, ShareState } from './model'
-import * as Picker from './picker'
-import { SLOT_INDEX_ATTRIBUTE } from './subscription'
+} from '../../../view/poster'
+import { slotButtonId } from '../command'
+import { Message } from '../message'
+import { Drag, type Model, type Pointer } from '../model'
+import { SLOT_INDEX_ATTRIBUTE } from '../subscription'
 
 const PRIMARY_MOUSE_BUTTON = 0
 
-const MOVE_HINT_ID = 'slot-move-hint'
+export const MOVE_HINT_ID = 'slot-move-hint'
 
 const TARGET_RING_CLASS = 'ring-[0.9cqw] ring-amber-400 ring-offset-2'
 
-const MOVE_KEYS: Readonly<Record<string, Poster.MoveDirection>> = {
+const MOVE_KEYS: Readonly<globalThis.Record<string, Poster.MoveDirection>> = {
   ArrowUp: 'Up',
   ArrowDown: 'Down',
   ArrowLeft: 'Left',
@@ -90,7 +80,10 @@ const toMaybeMoveMessage =
       Option.map(direction => Message.PressedMoveKey({ slotIndex, direction })),
     )
 
-const subtitlePickerView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const subtitlePickerView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): Html =>
   Select.view(
     {
       id: 'poster-subtitle',
@@ -100,7 +93,7 @@ const subtitlePickerView = (model: Model, h: HtmlBuilder<Message>): Html =>
         h.div(
           [
             h.Class(
-              'relative mx-auto flex w-fit max-w-full items-center gap-[0.8cqw] text-[2.4cqw] font-semibold text-ink/70 hover:text-ink',
+              'relative mx-auto flex w-fit max-w-full items-center gap-[0.8cqw] rounded-[1cqw] px-[1cqw] text-[2.4cqw] font-semibold text-ink/70 hover:text-ink has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-amber-400',
             ),
           ],
           [
@@ -147,8 +140,10 @@ const pickButtonView = (
             h.AriaLabel(`Change ${item.name}`),
             h.AriaDescribedBy(MOVE_HINT_ID),
             h.OnKeyDownPreventDefault(toMaybeMoveMessage(slotIndex)),
+            // NOTE: an outline (not an inset ring) so the focus indicator paints
+            // above the full-size cover image.
             h.Class(
-              'block size-full cursor-[inherit] outline-none focus-visible:ring-[0.8cqw] focus-visible:ring-amber-400 focus-visible:ring-inset',
+              'block size-full cursor-[inherit] outline-none focus-visible:outline-solid focus-visible:outline-[0.8cqw] focus-visible:-outline-offset-[0.8cqw] focus-visible:outline-amber-400',
             ),
           ],
           [coverImageView(item, h)],
@@ -278,7 +273,7 @@ const emptySlotView = (
     h,
   )
 
-const slotView = (
+export const slotView = (
   model: Model,
   maybeItem: Option.Option<Item>,
   slotIndex: number,
@@ -296,128 +291,3 @@ const slotView = (
     onSome: item => filledSlotView(item, slotIndex, dragState, h),
   })
 }
-
-const shareLinkNoticeView = (
-  url: string,
-  isCopied: boolean,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.p(
-    [],
-    [
-      isCopied ? 'Link copied: ' : 'Share link: ',
-      h.a([h.Href(url), h.Class('font-semibold break-all underline')], [url]),
-    ],
-  )
-
-const shareNoticeView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): Option.Option<Html> =>
-  ShareState.matchOrElse<Option.Option<Html>>(
-    model.share,
-    {
-      Shared: ({ url, clipboard }) =>
-        Option.some(shareLinkNoticeView(url, clipboard === 'Copied', h)),
-      Failed: ({ error }) => Option.some(errorNoticeView(error, h)),
-    },
-    () => Option.none(),
-  )
-
-const noticesView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> =>
-  Array.getSomes([
-    shareNoticeView(model, h),
-    Option.map(PosterDownload.maybeError(model.posterDownload), error =>
-      errorNoticeView(error, h),
-    ),
-  ])
-
-const toolbarView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> => {
-  const filledCount = Poster.filledCount(model.grid)
-  const isEmpty = filledCount === 0
-  return [
-    h.span(
-      [h.Class('mr-auto font-semibold')],
-      [`${filledCount} / ${GRID_SIZE} picked`],
-    ),
-    actionButtonView(
-      {
-        label: 'Start over',
-        onClick: Message.ClickedStartOver(),
-        isPrimary: false,
-        isBusy: false,
-        isDisabled: false,
-      },
-      h,
-    ),
-    h.submodel({
-      slotId: 'poster-download',
-      model: model.posterDownload,
-      view: PosterDownload.view,
-      viewInputs: {
-        filename: Poster.posterFilename(model.grid),
-        isPrimary: false,
-        isDisabled: isEmpty,
-      },
-      toParentMessage: message => Message.GotPosterDownloadMessage({ message }),
-    }),
-    actionButtonView(
-      {
-        label: 'Share link',
-        onClick: Message.ClickedShareLink(),
-        isPrimary: true,
-        isBusy: model.share._tag === 'Sharing',
-        isDisabled: isEmpty,
-      },
-      h,
-    ),
-  ]
-}
-
-export const view = Submodel.defineView<Model, Message>((model, h) =>
-  pageView(
-    {
-      toolbar: toolbarView(model, h),
-      notices: noticesView(model, h),
-      content: h.div(
-        [h.Class('w-full')],
-        [
-          posterFrameView(
-            posterView(
-              {
-                grid: model.grid,
-                subtitle: subtitlePickerView(model, h),
-                slots: Array.map(model.grid.items, (maybeItem, slotIndex) =>
-                  slotView(model, maybeItem, slotIndex, h),
-                ),
-              },
-              h,
-            ),
-            h,
-          ),
-          h.p(
-            [h.Id(MOVE_HINT_ID), h.Class('sr-only')],
-            ['Shift and arrow keys move it to a neighboring slot.'],
-          ),
-          h.div(
-            [h.AriaLive('polite'), h.Class('sr-only')],
-            [Option.getOrElse(model.maybeAnnouncement, () => '')],
-          ),
-          h.submodel({
-            slotId: 'picker',
-            model: model.picker,
-            view: Picker.view,
-            toParentMessage: message => Message.GotPickerMessage({ message }),
-          }),
-        ],
-      ),
-    },
-    h,
-  ),
-)

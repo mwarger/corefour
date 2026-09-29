@@ -1,3 +1,4 @@
+import { Option } from 'effect'
 import {
   Command,
   Mount,
@@ -9,18 +10,22 @@ import {
   label,
   role,
   scene,
+  selector,
   text,
   type,
 } from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
 import * as Poster from '../../domain/poster'
 import { twoItemGrid, zelda, zeldaResult } from '../../fixture'
+import * as PosterDownload from '../../posterDownload'
+import { DownloadPoster } from '../../posterDownload/command'
 import { CopyShareUrl, FocusSlot, SaveDraft, ShareGrid } from './command'
 import { Message } from './message'
-import { init } from './model'
+import { Drag, init } from './model'
 import * as Picker from './picker'
 import { SearchItems, WaitBeforeSearch } from './picker/command'
 import { update } from './update'
@@ -128,6 +133,65 @@ describe('editor', () => {
       ),
       expect(role('status')).toContainText('Link copied:'),
       expect(role('link', { name: SHARE_URL })).toExist(),
+    )
+  })
+
+  test('a blocked clipboard shows the link without claiming it was copied', () => {
+    scene(
+      { update, view },
+      given(init(twoItemGrid)),
+      click(role('button', { name: 'Share link' })),
+      Command.resolve(
+        ShareGrid,
+        Message.SucceededShareGrid({ generation: 1, url: SHARE_URL }),
+      ),
+      Command.resolve(
+        CopyShareUrl,
+        Message.FailedCopyShareUrl({ url: SHARE_URL }),
+      ),
+      expect(role('status')).toContainText('Share link:'),
+      expect(role('status')).not.toContainText('copied'),
+    )
+  })
+
+  test('a failed download is reported', () => {
+    scene(
+      { update, view },
+      given(init(twoItemGrid)),
+      click(role('button', { name: 'Download PNG' })),
+      Command.resolve(
+        DownloadPoster,
+        PosterDownload.Message.FailedDownloadPoster({
+          error: "Couldn't create the image.",
+        }),
+      ),
+      expect(role('status')).toHaveText("Couldn't create the image."),
+    )
+  })
+
+  test('the tile being dragged lets clicks and hit-testing pass through it', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(init(twoItemGrid), {
+          drag: () =>
+            Drag.Dragging({
+              slotIndex: 0,
+              pointer: 'Mouse',
+              originX: 0,
+              originY: 0,
+              currentX: 50,
+              currentY: 20,
+              maybeTargetIndex: Option.some(1),
+            }),
+        }),
+      ),
+      expect(selector('[data-slot-index="0"]')).toHaveClass(
+        'pointer-events-none',
+      ),
+      expect(selector('[data-slot-index="1"]')).not.toHaveClass(
+        'pointer-events-none',
+      ),
     )
   })
 

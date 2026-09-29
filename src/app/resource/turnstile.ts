@@ -1,4 +1,4 @@
-import { Data, Duration, Effect, Option } from 'effect'
+import { Data, Deferred, Duration, Effect, Option } from 'effect'
 
 // NOTE: site keys are public. In dev this is Cloudflare's invisible test key,
 // which always passes (paired with the test secret in .env).
@@ -16,9 +16,9 @@ type TurnstileApi = Readonly<{
     element: HTMLElement,
     options: Readonly<{
       sitekey: string
-      callback: (token: string) => void
-      'error-callback': () => void
-      'expired-callback': () => void
+      callback: (token: string) => unknown
+      'error-callback': () => unknown
+      'expired-callback': () => unknown
     }>,
   ) => string
   remove: (widgetId: string) => void
@@ -35,42 +35,51 @@ export class TurnstileError extends Data.TaggedError('TurnstileError')<{
   readonly message: string
 }> {}
 
+const SCRIPT_ID = 'turnstile-api'
+
+const loadFailure = () =>
+  new TurnstileError({
+    message: "Couldn't load verification. Check your connection and try again.",
+  })
+
 // NOTE: Turnstile is a third-party script with a callback API, so loading it
 // and rendering its (hidden, invisible-mode) widget touch the DOM directly.
-const loadApi = Effect.callback<TurnstileApi, TurnstileError>(resume =>
-  Option.match(Option.fromNullishOr(window.turnstile), {
-    onSome: api => resume(Effect.succeed(api)),
-    onNone: () => {
-      const script = document.createElement('script')
-      script.src = SCRIPT_URL
-      script.async = true
-      script.onload = () =>
-        resume(
-          Option.match(Option.fromNullishOr(window.turnstile), {
-            onSome: Effect.succeed,
-            onNone: () =>
-              Effect.fail(
-                new TurnstileError({
-                  message: "Couldn't load verification. Please try again.",
-                }),
-              ),
-          }),
-        )
-      script.onerror = () => {
-        script.remove()
-        resume(
-          Effect.fail(
-            new TurnstileError({
-              message:
-                "Couldn't load verification. Check your connection and try again.",
-            }),
-          ),
-        )
-      }
-      document.head.appendChild(script)
+// A share started while the script is still loading waits on the same tag.
+const loadApi = Effect.callback<TurnstileApi, TurnstileError>(resume => {
+  const resumeWithApi = () =>
+    resume(
+      Option.match(Option.fromNullishOr(window.turnstile), {
+        onSome: Effect.succeed,
+        onNone: () => Effect.fail(loadFailure()),
+      }),
+    )
+
+  if (window.turnstile) {
+    resumeWithApi()
+    return
+  }
+
+  const script = Option.getOrElse(
+    Option.fromNullishOr(document.getElementById(SCRIPT_ID)),
+    () => {
+      const newScript = document.createElement('script')
+      newScript.id = SCRIPT_ID
+      newScript.src = SCRIPT_URL
+      newScript.async = true
+      document.head.appendChild(newScript)
+      return newScript
     },
-  }),
-)
+  )
+  script.addEventListener('load', resumeWithApi, { once: true })
+  script.addEventListener(
+    'error',
+    () => {
+      script.remove()
+      resume(Effect.fail(loadFailure()))
+    },
+    { once: true },
+  )
+})
 
 const hiddenContainer = Effect.acquireRelease(
   Effect.sync(() => {
@@ -88,23 +97,29 @@ export const getTurnstileToken: Effect.Effect<string, TurnstileError> =
     Effect.gen(function* () {
       const api = yield* loadApi
       const container = yield* hiddenContainer
-      return yield* Effect.callback<string, TurnstileError>(resume => {
-        const failVerification = () =>
-          resume(
-            Effect.fail(
-              new TurnstileError({
-                message: "Couldn't verify you're human. Please try again.",
-              }),
-            ),
-          )
-        const widgetId = api.render(container, {
-          sitekey: SITE_KEY,
-          callback: token => resume(Effect.succeed(token)),
-          'error-callback': failVerification,
-          'expired-callback': failVerification,
-        })
-        return Effect.sync(() => api.remove(widgetId))
-      })
+      const tokenResult = yield* Deferred.make<string, TurnstileError>()
+      const failVerification = () =>
+        Deferred.doneUnsafe(
+          tokenResult,
+          Effect.fail(
+            new TurnstileError({
+              message: "Couldn't verify you're human. Please try again.",
+            }),
+          ),
+        )
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          api.render(container, {
+            sitekey: SITE_KEY,
+            callback: token =>
+              Deferred.doneUnsafe(tokenResult, Effect.succeed(token)),
+            'error-callback': failVerification,
+            'expired-callback': failVerification,
+          }),
+        ),
+        widgetId => Effect.sync(() => api.remove(widgetId)),
+      )
+      return yield* Deferred.await(tokenResult)
     }),
   ).pipe(
     Effect.timeoutOrElse({

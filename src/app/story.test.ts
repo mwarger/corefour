@@ -37,7 +37,10 @@ test('remixing a shared poster loads it into the editor and goes there', () => {
     given(init(noDraft, url('/g/abc1234567')).model),
     message(
       Message.GotSharedMessage({
-        message: Shared.Message.SucceededFetchGrid({ grid: twoItemGrid }),
+        message: Shared.Message.SucceededFetchGrid({
+          gridId: 'abc1234567',
+          grid: twoItemGrid,
+        }),
       }),
     ),
     message(
@@ -67,7 +70,10 @@ test('navigating to a different shared poster loads it', () => {
     }),
     Command.resolve(
       FetchGrid,
-      Shared.Message.FailedFetchGrid({ error: 'NotFound' }),
+      Shared.Message.FailedFetchGrid({
+        gridId: 'zzz9999999',
+        error: 'NotFound',
+      }),
     ),
   )
 })
@@ -78,11 +84,39 @@ test('returning to the poster already on screen does not reload it', () => {
     given(init(noDraft, url('/g/abc1234567')).model),
     message(
       Message.GotSharedMessage({
-        message: Shared.Message.SucceededFetchGrid({ grid: twoItemGrid }),
+        message: Shared.Message.SucceededFetchGrid({
+          gridId: 'abc1234567',
+          grid: twoItemGrid,
+        }),
       }),
     ),
     message(Message.ChangedUrl({ url: url('/') })),
     message(Message.ChangedUrl({ url: url('/g/abc1234567') })),
     Command.expectNone(),
+  )
+})
+
+test('reopening a poster that failed to load tries again', () => {
+  story(
+    update,
+    given(init(noDraft, url('/g/abc1234567')).model),
+    message(
+      Message.GotSharedMessage({
+        message: Shared.Message.FailedFetchGrid({
+          gridId: 'abc1234567',
+          error: 'Unavailable',
+        }),
+      }),
+    ),
+    message(Message.ChangedUrl({ url: url('/') })),
+    message(Message.ChangedUrl({ url: url('/g/abc1234567') })),
+    Command.expectHas(FetchGrid({ gridId: 'abc1234567' })),
+    Command.resolve(
+      FetchGrid,
+      Shared.Message.SucceededFetchGrid({
+        gridId: 'abc1234567',
+        grid: twoItemGrid,
+      }),
+    ),
   )
 })

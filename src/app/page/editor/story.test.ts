@@ -29,15 +29,20 @@ const itemNames = (grid: Grid) =>
   )
 
 const pressedByTouch = modifyFields(init(twoItemGrid), {
-  pressCount: () => 1,
+  pressGeneration: () => 1,
   drag: () =>
     Drag.Pressing({
       slotIndex: 0,
       pointer: 'Touch',
-      pressId: 1,
+      generation: 1,
       originX: 100,
       originY: 100,
     }),
+})
+
+const sharingFirstVersion = modifyFields(init(twoItemGrid), {
+  shareGeneration: () => 1,
+  share: () => ShareState.Sharing({ generation: 1 }),
 })
 
 describe('picking a game', () => {
@@ -229,7 +234,7 @@ describe('dragging with touch', () => {
       ),
       Command.resolve(
         WaitForLongPress,
-        Message.CompletedWaitForLongPress({ pressId: 1 }),
+        Message.CompletedWaitForLongPress({ generation: 1 }),
       ),
       model(({ drag }) => {
         expect(drag._tag).toBe('Dragging')
@@ -251,7 +256,7 @@ describe('dragging with touch', () => {
       model(({ drag }) => {
         expect(drag._tag).toBe('Idle')
       }),
-      message(Message.CompletedWaitForLongPress({ pressId: 1 })),
+      message(Message.CompletedWaitForLongPress({ generation: 1 })),
       model(({ drag }) => {
         expect(drag._tag).toBe('Idle')
       }),
@@ -368,20 +373,37 @@ describe('sharing', () => {
     )
   })
 
+  // NOTE: stories resolve every Command before the next Message, so these
+  // start from the moment right after "Share link" was clicked.
   test('a share that finishes after the poster was edited is ignored', () => {
     story(
       update,
-      given(
-        modifyFields(init(twoItemGrid), {
-          shareCount: () => 1,
-          share: () => ShareState.Idle(),
-        }),
-      ),
+      given(sharingFirstVersion),
+      message(Message.SelectedSubtitle({ subtitleId: 'comfort' })),
+      model(({ share }) => {
+        expect(share).toEqual(ShareState.Idle())
+      }),
+      Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
       message(Message.SucceededShareGrid({ generation: 1, url: SHARE_URL })),
       model(({ share }) => {
         expect(share).toEqual(ShareState.Idle())
       }),
       Command.expectNone(),
+    )
+  })
+
+  test('a share that fails after the poster was edited is ignored too', () => {
+    story(
+      update,
+      given(sharingFirstVersion),
+      message(Message.ClickedRemoveItem({ slotIndex: 1 })),
+      Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+      message(
+        Message.FailedShareGrid({ generation: 1, error: 'Sharing failed.' }),
+      ),
+      model(({ share }) => {
+        expect(share).toEqual(ShareState.Idle())
+      }),
     )
   })
 

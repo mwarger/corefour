@@ -9,6 +9,7 @@ import { editorRouter } from '../../route'
 import {
   actionButtonView,
   errorNoticeView,
+  messagePageView,
   pageView,
   posterFrameView,
 } from '../../view/layout'
@@ -26,26 +27,11 @@ const makeYourOwnLinkView = (h: HtmlBuilder<Message>): Html =>
     ['← Make your own'],
   )
 
-const loadErrorView = (error: LoadError, h: HtmlBuilder<Message>): Html =>
-  h.div(
-    [h.Class('py-20 text-center text-lg')],
-    [
-      h.h1(
-        [h.Class('inline font-normal')],
-        [
-          Match.value(error).pipe(
-            Match.when('NotFound', () => "This poster doesn't exist."),
-            Match.when('Unavailable', () => "Couldn't load this poster."),
-            Match.exhaustive,
-          ),
-        ],
-      ),
-      ' ',
-      h.a(
-        [h.Href(editorRouter()), h.Class('font-semibold underline')],
-        ['Make your own'],
-      ),
-    ],
+const loadErrorHeading = (error: LoadError): string =>
+  Match.value(error).pipe(
+    Match.when('NotFound', () => "This poster doesn't exist."),
+    Match.when('Unavailable', () => "Couldn't load this poster."),
+    Match.exhaustive,
   )
 
 const loadedView = (model: Model, grid: Grid, h: HtmlBuilder<Message>): Html =>
@@ -98,22 +84,10 @@ const loadedView = (model: Model, grid: Grid, h: HtmlBuilder<Message>): Html =>
     h,
   )
 
-const loadingView = (h: HtmlBuilder<Message>): Html =>
-  pageView({ toolbar: [], notices: [], content: h.empty }, h)
-
 export const view = Submodel.defineView<Model, Message>((model, h) =>
-  AsyncData.matchDataSplitEmpty(model.grid, {
-    onIdle: () => loadingView(h),
-    onLoading: () => loadingView(h),
-    onFailure: error =>
-      pageView(
-        {
-          toolbar: [],
-          notices: [],
-          content: posterFrameView(loadErrorView(error, h), h),
-        },
-        h,
-      ),
+  AsyncData.matchData(model.grid, {
+    onEmpty: () => messagePageView('Loading poster…', false, h),
+    onFailure: error => messagePageView(loadErrorHeading(error), true, h),
     onData: grid => loadedView(model, grid, h),
   }),
 )

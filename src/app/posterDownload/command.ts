@@ -1,8 +1,7 @@
 import { Effect, Schema } from 'effect'
 import { Command } from 'foldkit'
 
-import { downloadPosterPng } from '../resource/posterDownload'
-import { POSTER_ELEMENT_ID } from '../view/poster'
+import { POSTER_ELEMENT_ID, downloadPosterPng } from '../resource/posterImage'
 import { Message } from './message'
 
 export const DownloadPoster = Command.define('DownloadPoster', {

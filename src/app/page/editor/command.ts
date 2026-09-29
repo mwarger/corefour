@@ -65,11 +65,11 @@ export const CopyShareUrl = Command.define('CopyShareUrl', {
 })
 
 export const WaitForLongPress = Command.define('WaitForLongPress', {
-  args: { pressId: Schema.Number },
+  args: { generation: Schema.Number },
   messages: [Message.CompletedWaitForLongPress],
-  execute: ({ pressId }) =>
+  execute: ({ generation }) =>
     Effect.sleep(LONG_PRESS).pipe(
-      Effect.as(Message.CompletedWaitForLongPress({ pressId })),
+      Effect.as(Message.CompletedWaitForLongPress({ generation })),
     ),
 })
 

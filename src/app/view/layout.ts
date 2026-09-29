@@ -4,7 +4,9 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
-export type PageConfig = Readonly<{
+import { editorRouter } from '../route'
+
+type PageConfig = Readonly<{
   toolbar: ReadonlyArray<Html>
   notices: ReadonlyArray<Html>
   content: Html
@@ -60,7 +62,7 @@ export const posterFrameView = <Message>(
     [poster],
   )
 
-export type ActionButtonConfig<Message> = Readonly<{
+type ActionButtonConfig<Message> = Readonly<{
   label: string
   onClick: Message
   isPrimary: boolean
@@ -108,3 +110,38 @@ export const errorNoticeView = <Message>(
   message: string,
   h: HtmlBuilder<Message>,
 ): Html => h.p([h.Class('text-red-800')], [message])
+
+/**
+ * A page that is only a heading in the poster frame (loading, not found,
+ * failed), optionally followed by a link back to the editor.
+ */
+export const messagePageView = <Message>(
+  heading: string,
+  isLinkingToEditor: boolean,
+  h: HtmlBuilder<Message>,
+): Html =>
+  pageView(
+    {
+      toolbar: [],
+      notices: [],
+      content: posterFrameView(
+        h.div(
+          [h.Class('py-20 text-center text-lg')],
+          [
+            h.h1([h.Class('inline font-normal')], [heading]),
+            isLinkingToEditor
+              ? h.a(
+                  [
+                    h.Href(editorRouter()),
+                    h.Class('ml-1.5 font-semibold underline'),
+                  ],
+                  ['Make your own'],
+                )
+              : h.empty,
+          ],
+        ),
+        h,
+      ),
+    },
+    h,
+  )

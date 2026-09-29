@@ -30,7 +30,7 @@ export const Message = defineMessageUnion({
   },
   ReleasedPointer: {},
   CancelledPointer: {},
-  CompletedWaitForLongPress: { pressId: Schema.Number },
+  CompletedWaitForLongPress: { generation: Schema.Number },
   PressedMoveKey: { slotIndex: Schema.Number, direction: MoveDirection },
   CompletedFocusSlot: {},
   GotPickerMessage: { message: Picker.Message },

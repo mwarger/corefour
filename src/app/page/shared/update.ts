@@ -7,8 +7,6 @@ import { FetchGrid } from './command'
 import { Message, OutMessage } from './message'
 import { GridData, Model } from './model'
 
-type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
-
 /** A shared-poster page with nothing loaded, while another route is active. */
 export const initIdle = (): Model => ({
   maybeGridId: Option.none(),
@@ -25,6 +23,9 @@ export const init = (gridId: string): Update.Return<Model, Message> => ({
   commands: [FetchGrid({ gridId })],
 })
 
+const isCurrentPoster = (model: Model, gridId: string): boolean =>
+  Option.contains(model.maybeGridId, gridId)
+
 /** Whether the page already shows (or is loading) this poster. */
 export const isShowing = (model: Model, gridId: string): boolean =>
   Option.contains(model.maybeGridId, gridId) && !AsyncData.isFailure(model.grid)
@@ -38,26 +39,37 @@ const foldPosterDownload = Update.foldChild({
 })
 
 export const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    SucceededFetchGrid: ({ grid }) => ({
-      model: modifyFields(model, {
-        grid: () => GridData.Success({ data: grid }),
-      }),
-    }),
+  Message.match<Update.ReturnWithOutMessage<Model, Message, OutMessage>>(
+    message,
+    {
+      SucceededFetchGrid: ({ gridId, grid }) =>
+        isCurrentPoster(model, gridId)
+          ? {
+              model: modifyFields(model, {
+                grid: () => GridData.Success({ data: grid }),
+              }),
+            }
+          : { model },
 
-    FailedFetchGrid: ({ error }) => ({
-      model: modifyFields(model, { grid: () => GridData.Failure({ error }) }),
-    }),
+      FailedFetchGrid: ({ gridId, error }) =>
+        isCurrentPoster(model, gridId)
+          ? {
+              model: modifyFields(model, {
+                grid: () => GridData.Failure({ error }),
+              }),
+            }
+          : { model },
 
-    ClickedRemix: () =>
-      Option.match(AsyncData.getData(model.grid), {
-        onNone: () => ({ model }),
-        onSome: grid => ({
-          model,
-          outMessage: OutMessage.RequestedRemix({ grid }),
+      ClickedRemix: () =>
+        Option.match(AsyncData.getData(model.grid), {
+          onNone: () => ({ model }),
+          onSome: grid => ({
+            model,
+            outMessage: OutMessage.RequestedRemix({ grid }),
+          }),
         }),
-      }),
 
-    GotPosterDownloadMessage: ({ message }) =>
-      foldPosterDownload(model, message),
-  })
+      GotPosterDownloadMessage: ({ message }) =>
+        foldPosterDownload(model, message),
+    },
+  )

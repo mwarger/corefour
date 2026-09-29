@@ -1,3 +1,4 @@
+import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
 import { Grid } from '../../../shared/schema'
@@ -7,8 +8,8 @@ import { LoadError } from './model'
 // MESSAGE
 
 export const Message = defineMessageUnion({
-  SucceededFetchGrid: { grid: Grid },
-  FailedFetchGrid: { error: LoadError },
+  SucceededFetchGrid: { gridId: Schema.String, grid: Grid },
+  FailedFetchGrid: { gridId: Schema.String, error: LoadError },
   ClickedRemix: {},
   GotPosterDownloadMessage: { message: PosterDownload.Message },
 })

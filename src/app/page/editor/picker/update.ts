@@ -34,30 +34,33 @@ const foldDialogOutMessage = Dialog.OutMessage.match<
   Closed: () => model => ({ model: clearSearch(model) }),
 })
 
+const readDialog = (model: Model) => Option.some(model.dialog)
+const writeDialog = (model: Model, nextDialog: Dialog.Model): Model =>
+  modifyFields(model, { dialog: () => nextDialog })
+const toGotDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotDialogMessage({ message })
+
 const foldDialog = Update.foldChild({
   update: Dialog.update,
-  read: (model: Model) => Option.some(model.dialog),
-  write: (model, nextDialog) =>
-    modifyFields(model, { dialog: () => nextDialog }),
-  toParentMessage: message => Message.GotDialogMessage({ message }),
+  read: readDialog,
+  write: writeDialog,
+  toParentMessage: toGotDialogMessage,
   foldOutMessage: foldDialogOutMessage,
 })
 
 const foldDialogOpen = Update.foldChildStep({
   update: Dialog.open,
-  read: (model: Model) => Option.some(model.dialog),
-  write: (model, nextDialog) =>
-    modifyFields(model, { dialog: () => nextDialog }),
-  toParentMessage: message => Message.GotDialogMessage({ message }),
+  read: readDialog,
+  write: writeDialog,
+  toParentMessage: toGotDialogMessage,
   foldOutMessage: foldDialogOutMessage,
 })
 
 const foldDialogClose = Update.foldChildStep({
   update: Dialog.close,
-  read: (model: Model) => Option.some(model.dialog),
-  write: (model, nextDialog) =>
-    modifyFields(model, { dialog: () => nextDialog }),
-  toParentMessage: message => Message.GotDialogMessage({ message }),
+  read: readDialog,
+  write: writeDialog,
+  toParentMessage: toGotDialogMessage,
   foldOutMessage: foldDialogOutMessage,
 })
 
@@ -143,9 +146,12 @@ export const update = (model: Model, message: Message) =>
 
     ClickedResult: ({ result }) => selectResult(model, result),
 
+    // NOTE: only settled results match the current query; Refreshing and
+    // Stale still show the previous query's results.
     SubmittedSearch: () =>
       pipe(
-        AsyncData.getData(model.results),
+        Option.liftPredicate(model.results, AsyncData.isSuccess),
+        Option.flatMap(AsyncData.getData),
         Option.flatMap(Array.head),
         Option.match({
           onNone: () => ({ model }),

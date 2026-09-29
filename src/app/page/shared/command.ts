@@ -9,12 +9,16 @@ export const FetchGrid = Command.define('FetchGrid', {
   messages: [Message.SucceededFetchGrid, Message.FailedFetchGrid],
   execute: ({ gridId }) =>
     fetchGrid(gridId).pipe(
-      Effect.map(grid => Message.SucceededFetchGrid({ grid })),
+      Effect.map(grid => Message.SucceededFetchGrid({ gridId, grid })),
       Effect.catchTags({
         GridNotFoundError: () =>
-          Effect.succeed(Message.FailedFetchGrid({ error: 'NotFound' })),
+          Effect.succeed(
+            Message.FailedFetchGrid({ gridId, error: 'NotFound' }),
+          ),
         ApiError: () =>
-          Effect.succeed(Message.FailedFetchGrid({ error: 'Unavailable' })),
+          Effect.succeed(
+            Message.FailedFetchGrid({ gridId, error: 'Unavailable' }),
+          ),
       }),
     ),
 })

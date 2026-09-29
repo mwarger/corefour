@@ -4,6 +4,9 @@ import { domToPng } from 'modern-screenshot'
 /** Width of the downloaded PNG in pixels, whatever the screen size. */
 const DOWNLOAD_WIDTH = 1080
 
+/** The poster element saved as a PNG. One poster renders per page. */
+export const POSTER_ELEMENT_ID = 'poster'
+
 /** Elements carrying this data attribute (editing controls) are left out of downloads. */
 export const DOWNLOAD_IGNORE_ATTRIBUTE = 'download-ignore'
 

@@ -1,4 +1,4 @@
-import { Array, Effect, Option, Schema, Stream, pipe } from 'effect'
+import { Array, Effect, Number, Option, Schema, Stream, pipe } from 'effect'
 import { Subscription } from 'foldkit'
 
 import { Message } from './message'
@@ -22,7 +22,7 @@ const slotIndexUnderPointer = (
     ),
     Array.getSomes,
     Array.head,
-    Option.map(globalThis.Number),
+    Option.flatMap(Number.parse),
   )
 
 const isPointerDown = (drag: Drag): boolean =>

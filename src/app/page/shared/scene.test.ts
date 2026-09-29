@@ -39,3 +39,11 @@ test('a poster that could not be loaded says so', () => {
     expect(role('heading', { name: "Couldn't load this poster." })).toExist(),
   )
 })
+
+test('a poster that is still loading says so', () => {
+  scene(
+    { update, view },
+    given(withGrid(GridData.Loading())),
+    expect(role('heading', { name: 'Loading poster…' })).toExist(),
+  )
+})

@@ -1,8 +1,10 @@
+import type { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import * as Poster from '../../../domain/poster'
 import { CopyShareUrl, ShareGrid } from '../command'
-import { type Model, ShareState } from '../model'
+import type { Message } from '../message'
+import { type Clipboard, type Model, ShareState } from '../model'
 import type { UpdateReturn } from './update'
 
 const isCurrentShare = (model: Model, generation: number): boolean =>
@@ -20,8 +22,8 @@ const isShownUrl = (model: Model, url: string): boolean =>
   )
 
 const setClipboard =
-  (model: Model, url: string) =>
-  (clipboard: typeof ShareState.Shared.Type.clipboard): UpdateReturn =>
+  (url: string, clipboard: Clipboard): Update.Step<Model, Message> =>
+  model =>
     isShownUrl(model, url)
       ? {
           model: modifyFields(model, {
@@ -34,10 +36,10 @@ export const handleClickedShareLink = (model: Model): UpdateReturn => {
   if (model.share._tag === 'Sharing' || Poster.isEmpty(model.grid)) {
     return { model }
   }
-  const generation = model.shareCount + 1
+  const generation = model.shareGeneration + 1
   return {
     model: modifyFields(model, {
-      shareCount: () => generation,
+      shareGeneration: () => generation,
       share: () => ShareState.Sharing({ generation }),
     }),
     commands: [ShareGrid({ grid: model.grid, generation })],
@@ -77,9 +79,9 @@ export const handleFailedShareGrid =
 export const handleSucceededCopyShareUrl =
   (model: Model) =>
   ({ url }: { url: string }): UpdateReturn =>
-    setClipboard(model, url)('Copied')
+    setClipboard(url, 'Copied')(model)
 
 export const handleFailedCopyShareUrl =
   (model: Model) =>
   ({ url }: { url: string }): UpdateReturn =>
-    setClipboard(model, url)('NotCopied')
+    setClipboard(url, 'NotCopied')(model)

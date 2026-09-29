@@ -131,6 +131,23 @@ test('pressing Enter picks the first result for the slot being edited', () => {
   )
 })
 
+test('pressing Enter before the new results arrive does not pick an old result', () => {
+  story(
+    update,
+    given(withResults('ma', [zeldaResult])),
+    message(Message.UpdatedQuery({ value: 'mario kart' })),
+    Command.resolve(
+      WaitBeforeSearch,
+      Message.CompletedWaitBeforeSearch({ generation: 0 }),
+    ),
+    message(Message.SubmittedSearch()),
+    model(({ results }) => {
+      expect(results._tag).toBe('Refreshing')
+    }),
+    Command.expectNone(),
+  )
+})
+
 test('pressing Enter with no results does nothing', () => {
   story(
     update,

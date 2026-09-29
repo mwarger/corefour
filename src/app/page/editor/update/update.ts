@@ -12,11 +12,11 @@ import {
   handleCancelledPointer,
   handleCompletedWaitForLongPress,
   handleMovedPointer,
-  handlePressedMoveKey,
   handlePressedSlot,
   handleReleasedPointer,
 } from './drag'
 import { editGrid } from './editGrid'
+import { handlePressedMoveKey } from './move'
 import {
   handleClickedShareLink,
   handleFailedCopyShareUrl,

@@ -17,6 +17,8 @@ import {
 } from '../../shared/schema'
 
 const HTTP_NOT_FOUND = 404
+const HTTP_SUCCESS_MIN = 200
+const HTTP_SUCCESS_MAX = 299
 const REQUEST_TIMEOUT = Duration.seconds(20)
 
 const SEARCH_FAILED = 'Search failed. Try again in a moment.'
@@ -34,7 +36,7 @@ export class GridNotFoundError extends Data.TaggedError('GridNotFoundError') {}
 type Response = HttpClientResponse.HttpClientResponse
 
 const isOk = (response: Response): boolean =>
-  response.status >= 200 && response.status < 300
+  response.status >= HTTP_SUCCESS_MIN && response.status <= HTTP_SUCCESS_MAX
 
 const send = (request: HttpClientRequest.HttpClientRequest, failure: string) =>
   Effect.gen(function* () {
