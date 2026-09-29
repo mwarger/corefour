@@ -169,6 +169,9 @@ importers:
       '@cf-wasm/og':
         specifier: ^0.5.0
         version: 0.5.0(react@19.3.0)
+      '@cf-wasm/resvg':
+        specifier: 0.4.0
+        version: 0.4.0
       '@effect/platform-browser':
         specifier: 4.0.0-rc.116
         version: 4.0.0-rc.116(effect@4.0.0-rc.116)

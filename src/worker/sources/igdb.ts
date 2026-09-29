@@ -77,7 +77,7 @@ const toItem = (g: IgdbGame): Item =>
 const IMAGE_SIZES: Record<ImageSize, string> = {
   thumb: 'cover_small',
   cover: 'cover_big_2x',
-  og: 'cover_big',
+  og: 'cover_small_2x',
 }
 
 export const igdb: Source = {
