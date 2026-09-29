@@ -1,6 +1,7 @@
 {
   "name": "corefour",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "alchemy dev",

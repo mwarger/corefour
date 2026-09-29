@@ -82,3 +82,7 @@ This deploys the `prod` stage, which is served at `corefour.<your-subdomain>.wor
 ## Credits
 
 Game data and cover art come from [IGDB](https://www.igdb.com). Inspired by the "My 9" grids that go around on social media.
+
+## License
+
+[MIT](LICENSE). Game names and cover art belong to their owners and are served from IGDB; they aren't covered by this license.
