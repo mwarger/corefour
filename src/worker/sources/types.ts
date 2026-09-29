@@ -1,11 +1,11 @@
-import type { Item, SearchResult } from "../../shared/types.ts";
+import type { Item, SearchResult } from '../../shared/schema.ts'
 
-export type ImageSize = "thumb" | "cover" | "og";
+export type ImageSize = 'thumb' | 'cover' | 'og'
 
 export interface Source {
-	search(query: string): Promise<SearchResult[]>;
-	/** Resolves IDs (already validated against SOURCE_ID_PATTERNS) to canonical items. */
-	lookup(ids: string[]): Promise<Map<string, Item>>;
-	/** Upstream image URL, or null if the key isn't valid for this source. */
-	imageUrl(size: ImageSize, key: string): string | null;
+  search(query: string): Promise<ReadonlyArray<SearchResult>>
+  /** Resolves already-validated IDs to canonical items, keyed by ID. */
+  lookup(ids: ReadonlyArray<string>): Promise<ReadonlyMap<string, Item>>
+  /** Upstream image URL, or null if the key isn't valid for this source. */
+  imageUrl(size: ImageSize, key: string): string | null
 }

@@ -1,137 +1,184 @@
-import { env } from "cloudflare:workers";
-import { cache, GoogleFont, ImageResponse } from "@cf-wasm/og/workerd";
-import { CATEGORIES, subtitleText } from "../shared/catalog.ts";
-import type { Grid, Item } from "../shared/types.ts";
-import { SOURCES } from "./sources/index.ts";
+import { env } from 'cloudflare:workers'
+import { Option } from 'effect'
 
-const INK = "#1f3a2c";
-const CREAM = "#f8f3e3";
-const TILE_W = 190;
-const TILE_H = 266;
-const GAP = 16;
+import { cache, GoogleFont, ImageResponse } from '@cf-wasm/og/workerd'
+
+import { CATEGORIES, findSubtitle } from '../shared/catalog.ts'
+import type { Grid, Item } from '../shared/schema.ts'
+import { SOURCES } from './sources/index.ts'
+
+// NOTE: satori renders JSX, so the Worker (only) depends on React's JSX runtime.
+const INK = '#1f3a2c'
+const CREAM = '#f8f3e3'
+const TILE_W = 190
+const TILE_H = 266
+const GAP = 16
 
 async function coverDataUrl(item: Item): Promise<string | null> {
-	const url = SOURCES[item.source].imageUrl("og", item.image);
-	if (!url) return null;
-	const res = await fetch(url, { cf: { cacheEverything: true, cacheTtl: 31_536_000 } });
-	if (!res.ok) return null;
-	const bytes = new Uint8Array(await res.arrayBuffer());
-	let binary = "";
-	for (let i = 0; i < bytes.length; i += 0x8000) {
-		binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-	}
-	return `data:image/jpeg;base64,${btoa(binary)}`;
+  const url = SOURCES[item.source].imageUrl('og', item.image)
+  if (!url) return null
+  const res = await fetch(url, {
+    cf: { cacheEverything: true, cacheTtl: 31_536_000 },
+  })
+  if (!res.ok) return null
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return `data:image/jpeg;base64,${btoa(binary)}`
 }
 
 /** 1200×630 link-preview image: title on the left, the 2×2 covers on the right. */
-async function renderOgImage(grid: Grid, ctx: ExecutionContext): Promise<Response> {
-	cache.setExecutionContext(ctx);
-	const covers = await Promise.all(
-		grid.items.map((item) => (item ? coverDataUrl(item) : Promise.resolve(null))),
-	);
-	const category = CATEGORIES[grid.category];
-	const subtitle = subtitleText(grid.category, grid.subtitle);
+async function renderOgImage(
+  grid: Grid,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  cache.setExecutionContext(ctx)
+  const covers = await Promise.all(
+    grid.items.map(maybeItem =>
+      Option.match(maybeItem, {
+        onNone: () => Promise.resolve(null),
+        onSome: coverDataUrl,
+      }),
+    ),
+  )
+  const category = CATEGORIES[grid.category]
+  const subtitle = Option.map(
+    findSubtitle(grid.category, grid.subtitle),
+    ({ text }) => text,
+  )
 
-	return ImageResponse.async(
-		<div
-			style={{
-				display: "flex",
-				width: "100%",
-				height: "100%",
-				padding: "36px 56px",
-				alignItems: "center",
-				justifyContent: "space-between",
-				background: "linear-gradient(180deg, #d5e6d3 0%, #e7eedc 55%, #eef0e0 100%)",
-				fontFamily: "Inter",
-				color: INK,
-			}}
-		>
-			<div style={{ display: "flex", flexDirection: "column", width: 560, gap: 20 }}>
-				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						gap: 10,
-						padding: "28px 32px",
-						borderRadius: 24,
-						background: CREAM,
-						border: "1px solid rgba(0,0,0,0.1)",
-					}}
-				>
-					<div style={{ fontSize: 64, fontWeight: 800, lineHeight: 1.1 }}>{category.title}</div>
-					{subtitle && <div style={{ fontSize: 26, fontWeight: 600, opacity: 0.7 }}>{subtitle}</div>}
-				</div>
-				<div style={{ display: "flex" }}>
-					<div
-						style={{
-							padding: "8px 22px",
-							borderRadius: 999,
-							background: "rgba(248,243,227,0.85)",
-							fontSize: 22,
-							fontWeight: 800,
-						}}
-					>
-						{category.hashtag}
-					</div>
-				</div>
-			</div>
+  return ImageResponse.async(
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        padding: '36px 56px',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background:
+          'linear-gradient(180deg, #d5e6d3 0%, #e7eedc 55%, #eef0e0 100%)',
+        fontFamily: 'Inter',
+        color: INK,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: 560,
+          gap: 20,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            padding: '28px 32px',
+            borderRadius: 24,
+            background: CREAM,
+            border: '1px solid rgba(0,0,0,0.1)',
+          }}
+        >
+          <div style={{ fontSize: 64, fontWeight: 800, lineHeight: 1.1 }}>
+            {category.title}
+          </div>
+          {Option.match(subtitle, {
+            onNone: () => null,
+            onSome: text => (
+              <div style={{ fontSize: 26, fontWeight: 600, opacity: 0.7 }}>
+                {text}
+              </div>
+            ),
+          })}
+        </div>
+        <div style={{ display: 'flex' }}>
+          <div
+            style={{
+              padding: '8px 22px',
+              borderRadius: 999,
+              background: 'rgba(248,243,227,0.85)',
+              fontSize: 22,
+              fontWeight: 800,
+            }}
+          >
+            {category.hashtag}
+          </div>
+        </div>
+      </div>
 
-			<div style={{ display: "flex", flexWrap: "wrap", width: TILE_W * 2 + GAP, gap: GAP }}>
-				{covers.map((src, i) => (
-					<div
-						key={i}
-						style={{
-							display: "flex",
-							width: TILE_W,
-							height: TILE_H,
-							borderRadius: 16,
-							overflow: "hidden",
-							border: `3px solid ${src ? INK : "rgba(31,58,44,0.2)"}`,
-							background: src ? INK : "rgba(255,255,255,0.4)",
-						}}
-					>
-						{src && (
-							<img
-								src={src}
-								width={TILE_W - 6}
-								height={TILE_H - 6}
-								style={{ objectFit: "cover" }}
-							/>
-						)}
-					</div>
-				))}
-			</div>
-		</div>,
-		{
-			width: 1200,
-			height: 630,
-			fonts: [
-				new GoogleFont("Inter", { weight: 600 }),
-				new GoogleFont("Inter", { weight: 800 }),
-			],
-			headers: { "Cache-Control": "public, max-age=31536000, immutable" },
-		},
-	);
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          width: TILE_W * 2 + GAP,
+          gap: GAP,
+        }}
+      >
+        {covers.map((src, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              width: TILE_W,
+              height: TILE_H,
+              borderRadius: 16,
+              overflow: 'hidden',
+              border: `3px solid ${src ? INK : 'rgba(31,58,44,0.2)'}`,
+              background: src ? INK : 'rgba(255,255,255,0.4)',
+            }}
+          >
+            {src && (
+              <img
+                src={src}
+                width={TILE_W - 6}
+                height={TILE_H - 6}
+                style={{ objectFit: 'cover' }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>,
+    {
+      width: 1200,
+      height: 630,
+      fonts: [
+        new GoogleFont('Inter', { weight: 600 }),
+        new GoogleFont('Inter', { weight: 800 }),
+      ],
+      headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
+    },
+  )
 }
 
 /** Bump when the preview design changes; also busts crawler image caches. */
-export const OG_VERSION = 1;
+export const OG_VERSION = 2
 
-const objectKey = (id: string) => `v${OG_VERSION}/${id}.png`;
+const objectKey = (id: string) => `v${OG_VERSION}/${id}.png`
 
-export const ogImagePath = (id: string) => `/api/og/${id}.png?v=${OG_VERSION}`;
+export const ogImagePath = (id: string) => `/api/og/${id}.png?v=${OG_VERSION}`
 
 /**
  * Rendering takes ~1s and a lot of CPU, which is too slow for crawlers that
  * fetch the image with a short timeout. So previews are rendered once, when
  * the poster is shared, and stored in R2.
  */
-export async function ensureOgImage(id: string, grid: Grid, ctx: ExecutionContext) {
-	const key = objectKey(id);
-	const existing = await env.OG_IMAGES.get(key);
-	if (existing) return existing.arrayBuffer();
+export async function ensureOgImage(
+  id: string,
+  grid: Grid,
+  ctx: ExecutionContext,
+) {
+  const key = objectKey(id)
+  const existing = await env.OG_IMAGES.get(key)
+  if (existing) return existing.arrayBuffer()
 
-	const png = await (await renderOgImage(grid, ctx)).arrayBuffer();
-	await env.OG_IMAGES.put(key, png, { httpMetadata: { contentType: "image/png" } });
-	return png;
+  const png = await (await renderOgImage(grid, ctx)).arrayBuffer()
+  await env.OG_IMAGES.put(key, png, {
+    httpMetadata: { contentType: 'image/png' },
+  })
+  return png
 }

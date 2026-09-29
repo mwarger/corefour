@@ -1,0 +1,18 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+@theme {
+  --color-ink: #1f3a2c;
+  --color-cream: #f8f3e3;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  min-height: 100dvh;
+  background: #e4ece0;
+  color: var(--color-ink);
+}
+
+.poster-bg {
+  background: linear-gradient(180deg, #d5e6d3 0%, #e7eedc 55%, #eef0e0 100%);
+}
