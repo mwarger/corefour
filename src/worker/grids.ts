@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers'
 import { Array, Effect, Option, Schema, pipe } from 'effect'
 
-import { GridId, ShareBusy, UnknownItem } from '../shared/api.ts'
-import { Grid, GridJson, type ShareRequest } from '../shared/schema.ts'
+import { ShareBusy, UnknownItem } from '../shared/api.ts'
+import { Grid, GridId, GridJson, type ShareRequest } from '../shared/schema.ts'
 import { gridId } from './ids.ts'
 import { upgradeLegacyGrid } from './legacy.ts'
 import { SOURCES } from './sources/index.ts'

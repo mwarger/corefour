@@ -53,6 +53,13 @@ export const Grid = Schema.Struct({
 }).check(isKnownSubtitle)
 export type Grid = typeof Grid.Type
 
+/** Shared posters are content-addressed: 10 base62 characters. */
+export const GridId = Schema.String.check(Schema.isPattern(/^[0-9A-Za-z]{10}$/))
+
+/** A poster someone shared, with the ID its link uses. */
+export const SharedPoster = Schema.Struct({ id: GridId, grid: Grid })
+export type SharedPoster = typeof SharedPoster.Type
+
 /** How grids are stored (KV, localStorage) and sent over the wire. */
 export const GridJson = Schema.fromJsonString(Schema.toCodecJson(Grid))
 

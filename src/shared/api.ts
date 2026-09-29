@@ -8,16 +8,13 @@ import {
 } from 'effect/unstable/httpapi'
 
 import { CategoryId, SourceId } from './catalog.ts'
-import { Grid, SearchResults, ShareRequest } from './schema.ts'
+import { Grid, GridId, SearchResults, ShareRequest } from './schema.ts'
 
 /**
  * The Worker's HTTP API, declared once. The Worker implements it with
  * `HttpApiBuilder` and the client derives its typed client from it with
  * `HttpApiClient`, so the two cannot disagree about paths, payloads, or errors.
  */
-
-/** Shared posters are content-addressed: 10 base62 characters. */
-export const GridId = Schema.String.check(Schema.isPattern(/^[0-9A-Za-z]{10}$/))
 
 export const ImageSize = Schema.Literals(['thumb', 'cover', 'og'])
 export type ImageSize = typeof ImageSize.Type

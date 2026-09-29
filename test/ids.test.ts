@@ -1,7 +1,7 @@
 import { Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 
-import { GridId } from '../src/shared/api.ts'
+import { GridId } from '../src/shared/schema.ts'
 import { gridId } from '../src/worker/ids.ts'
 
 describe('gridId', () => {

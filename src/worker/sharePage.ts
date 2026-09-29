@@ -11,6 +11,8 @@ import type { Grid } from '../shared/schema.ts'
 import { loadGrid } from './grids.ts'
 import { ogImagePath } from './og.tsx'
 
+import { renderSharedPage } from '#app/entry.server'
+
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`)
 
@@ -53,18 +55,38 @@ const withPreviewTags = (
 		<meta name="twitter:image" content="${image}" />
 		<meta name="twitter:image:alt" content="${alt}" />`
 
-  return (
-    new HTMLRewriter()
-      .on('title', { element: el => void el.setInnerContent(heading) })
-      // Tags go first so crawlers that only read the first chunk see them.
-      .on('head', { element: el => void el.prepend(meta, { html: true }) })
-      .transform(page)
-  )
+  // Tags go first so crawlers that only read the first chunk see them.
+  return new HTMLRewriter()
+    .on('head', { element: el => void el.prepend(meta, { html: true }) })
+    .transform(page)
 }
 
+/** Must match what static assets send for index.html, which it replaces. */
+const PAGE_CACHE_CONTROL = 'public, max-age=0, must-revalidate'
+
 /**
- * Shared posters get the app shell plus Open Graph tags, so links unfurl with
- * a preview image in chat apps and social sites.
+ * The poster's page rendered by Foldkit, so it arrives complete and the
+ * browser hydrates it. If rendering fails, the plain app shell still works:
+ * the browser boots normally and fetches the poster itself.
+ */
+const renderPage = (template: string, id: string, grid: Grid, url: string) =>
+  renderSharedPage({ template, url, poster: { id, grid } }).pipe(
+    Effect.tapError(error => Effect.logError('Server render failed', error)),
+    Effect.orElseSucceed(() => template),
+    Effect.map(
+      html =>
+        new Response(html, {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': PAGE_CACHE_CONTROL,
+          },
+        }),
+    ),
+  )
+
+/**
+ * Shared posters are server-rendered and carry Open Graph tags, so links
+ * unfurl with a preview image in chat apps and social sites.
  */
 export const SharePageLive = HttpRouter.add(
   'GET',
@@ -74,19 +96,21 @@ export const SharePageLive = HttpRouter.add(
     const { id = '' } = yield* HttpRouter.params
     const pageUrl = request.originalUrl
 
-    const [page, maybeGrid] = yield* Effect.all(
+    const [shell, maybeGrid] = yield* Effect.all(
       [
         Effect.promise(() => env.ASSETS.fetch(new URL('/', pageUrl))),
         loadGrid(id),
       ],
       { concurrency: 'unbounded' },
     )
+    if (Option.isNone(maybeGrid)) {
+      return HttpServerResponse.fromWeb(shell)
+    }
 
+    const template = yield* Effect.promise(() => shell.text())
+    const page = yield* renderPage(template, id, maybeGrid.value, pageUrl)
     return HttpServerResponse.fromWeb(
-      Option.match(maybeGrid, {
-        onNone: () => page,
-        onSome: grid => withPreviewTags(page, id, grid, pageUrl),
-      }),
+      withPreviewTags(page, id, maybeGrid.value, pageUrl),
     )
   }),
 )

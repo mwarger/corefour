@@ -28,6 +28,8 @@ It runs entirely on Cloudflare's free tier. It is also a demo of an all-Effect s
 
 **Client.** A Foldkit app with two pages, the editor (`/`) and a shared poster (`/g/:id`). Each page is a Submodel with its own Model, Messages, and update. The search picker is a `@foldkit/ui` Dialog. Drag-to-swap is hand-rolled on pointer events, because tiles swap in place instead of reordering a list. Side effects live in Commands (the API calls, draft autosave, PNG export, invisible Turnstile), and behavior is covered by Foldkit story and scene tests.
 
+**Server rendering.** Shared posters are rendered on the server with Foldkit's (experimental) SSR. The Worker loads the poster and renders the same `init` and `view` the browser runs, passing the poster in as Flags. The browser then hydrates that HTML instead of fetching the poster again, so a shared link shows the poster immediately and crawlers see the game names. The editor still boots in the browser, since the draft it restores lives in `localStorage`.
+
 **Shared API.** `src/shared/api.ts` declares every endpoint once with Effect's `HttpApi`: its path, params, payload, success schema, and typed errors (`GridNotFound`, `TooManyShares`, `NotVerified`, ...) with their HTTP statuses. The Worker implements it with `HttpApiBuilder`, and the client gets a typed client from the same definition with `HttpApiClient`, so the two can't drift apart. A request that doesn't match, such as an unknown subtitle, a malformed ID, or an empty poster, is rejected with a 400 before any handler runs.
 
 **Worker.** One Effect `HttpRouter` serves the API, the shared-poster pages, and falls back to the static client build for everything else.
@@ -35,7 +37,7 @@ It runs entirely on Cloudflare's free tier. It is also a demo of an all-Effect s
 - `/api/search`: IGDB search through a Twitch app token (cached in KV). Results are ranked and cached with the Cache API.
 - `/api/img/...`: a same-origin cover proxy, so exporting the poster to PNG doesn't taint the canvas. It only fetches from each source's own image host.
 - `POST /api/grids`: rate-limited and Turnstile-verified. It resolves item IDs against IGDB and stores the poster in KV under a content-addressed ID, so sharing the same poster twice gives the same link.
-- `/g/:id`: serves the app with per-poster Open Graph tags injected by `HTMLRewriter`.
+- `/g/:id`: the server-rendered poster page, with Open Graph tags added by `HTMLRewriter`. If rendering fails, it falls back to the plain app page.
 - `/api/docs`: an interactive API reference (Scalar) generated from the same definition, with the OpenAPI document at `/api/openapi.json`.
 - `/api/og/:id.png`: a 1200×630 link preview rendered with satori and resvg, pre-rendered to R2 when the poster is shared. The layout is tuned to fit the Free plan's CPU limit; see `src/worker/ogLayout.tsx`.
 

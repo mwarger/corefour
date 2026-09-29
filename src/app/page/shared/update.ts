@@ -2,6 +2,7 @@ import { Option } from 'effect'
 import { AsyncData, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import type { Grid } from '../../../shared/schema'
 import * as PosterDownload from '../../posterDownload'
 import { FetchGrid } from './command'
 import { Message, OutMessage } from './message'
@@ -11,6 +12,13 @@ import { GridData, Model } from './model'
 export const initIdle = (): Model => ({
   maybeGridId: Option.none(),
   grid: GridData.Idle(),
+  posterDownload: PosterDownload.init(),
+})
+
+/** A shared-poster page whose poster arrived with the page, so nothing is fetched. */
+export const initLoaded = (gridId: string, grid: Grid): Model => ({
+  maybeGridId: Option.some(gridId),
+  grid: GridData.Success({ data: grid }),
   posterDownload: PosterDownload.init(),
 })
 

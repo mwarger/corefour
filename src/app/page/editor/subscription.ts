@@ -29,7 +29,9 @@ const isPointerDown = (drag: Drag): boolean =>
 const isDraggingByTouch = (drag: Drag): boolean =>
   drag._tag === 'Dragging' && drag.pointer === 'Touch'
 
-const pointerEvents: ReadonlyArray<Stream.Stream<Message>> = [
+// NOTE: these streams are built lazily because the Worker imports this module
+// to server-render shared posters, and `document` doesn't exist there.
+const pointerEvents = (): ReadonlyArray<Stream.Stream<Message>> => [
   Subscription.fromEvent({
     target: document,
     type: 'pointermove',
@@ -52,14 +54,14 @@ const pointerEvents: ReadonlyArray<Stream.Stream<Message>> = [
   }),
 ]
 
-const pointerStream: Stream.Stream<Message> = Stream.mergeAll(pointerEvents, {
-  concurrency: 'unbounded',
-})
+const pointerStream: Stream.Stream<Message> = Stream.suspend(() =>
+  Stream.mergeAll(pointerEvents(), { concurrency: 'unbounded' }),
+)
 
 // NOTE: once a long press turns into a drag, cancelling touchmove stops the
 // page from scrolling under the finger. It emits nothing; pointermove above
 // carries the position.
-const touchScrollLockStream: Stream.Stream<Message> =
+const touchScrollLockStream: Stream.Stream<Message> = Stream.suspend(() =>
   Subscription.fromEventFilterMap({
     target: document,
     type: 'touchmove',
@@ -68,7 +70,8 @@ const touchScrollLockStream: Stream.Stream<Message> =
       event.preventDefault()
       return Option.none<Message>()
     },
-  })
+  }),
+)
 
 // NOTE: keeps the grabbing cursor and prevents text selection anywhere on the
 // page while a tile is being dragged, the same way @foldkit/ui DragAndDrop does.

@@ -1,20 +1,30 @@
-import { Option } from 'effect'
+import { Option, pipe } from 'effect'
+import { AsyncData } from 'foldkit'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { fromString } from 'foldkit/url'
 import { expect, test } from 'vitest'
 
+import * as Poster from './domain/poster'
 import { twoItemGrid } from './fixture'
 import { init } from './main'
 import { Message } from './message'
 import { Editor, Shared } from './page'
 import { SaveDraft } from './page/editor/command'
 import { FetchGrid } from './page/shared/command'
-import { NavigateInternal, update } from './update'
+import { NavigateInternal, RestoreDraft, update } from './update'
 
 const url = (path: string) =>
   Option.getOrThrow(fromString(`http://localhost${path}`))
 
-const noDraft = { maybeDraft: Option.none() }
+const noDraft = { maybeDraft: Option.none(), maybeSharedPoster: Option.none() }
+
+/** A saved draft that differs from the shared poster. */
+const draftGrid = pipe(twoItemGrid, Poster.swapItems(0, 1))
+
+const serverRendered = {
+  maybeDraft: Option.none(),
+  maybeSharedPoster: Option.some({ id: 'abc1234567', grid: twoItemGrid }),
+}
 
 test('opening a share link starts loading that poster', () => {
   const init_ = init(noDraft, url('/g/abc1234567'))
@@ -25,10 +35,55 @@ test('opening a share link starts loading that poster', () => {
 })
 
 test('the editor starts from the saved draft', () => {
-  const init_ = init({ maybeDraft: Option.some(twoItemGrid) }, url('/'))
+  const init_ = init(
+    { maybeDraft: Option.some(twoItemGrid), maybeSharedPoster: Option.none() },
+    url('/'),
+  )
 
   expect(init_.model.route._tag).toBe('Editor')
   expect(init_.model.editor.grid).toEqual(twoItemGrid)
+})
+
+test('a server-rendered poster starts loaded and restores the draft instead of fetching', () => {
+  const init_ = init(serverRendered, url('/g/abc1234567'))
+
+  expect(AsyncData.getData(init_.model.shared.grid)).toEqual(
+    Option.some(twoItemGrid),
+  )
+  expect(init_.commands?.map(({ name }) => name)).toEqual([RestoreDraft.name])
+})
+
+test('the draft restored after a server-rendered page fills the empty editor', () => {
+  story(
+    update,
+    given(init(serverRendered, url('/g/abc1234567')).model),
+    message(
+      Message.CompletedRestoreDraft({ maybeDraft: Option.some(twoItemGrid) }),
+    ),
+    model(({ editor }) => {
+      expect(editor.grid).toEqual(twoItemGrid)
+    }),
+  )
+})
+
+test('a restored draft does not replace a poster already in the editor', () => {
+  story(
+    update,
+    given(init(serverRendered, url('/g/abc1234567')).model),
+    message(
+      Message.GotSharedMessage({ message: Shared.Message.ClickedRemix() }),
+    ),
+    Command.resolve(SaveDraft, Editor.Message.CompletedSaveDraft()),
+    Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
+    message(
+      Message.CompletedRestoreDraft({
+        maybeDraft: Option.some(draftGrid),
+      }),
+    ),
+    model(({ editor }) => {
+      expect(editor.grid).toEqual(twoItemGrid)
+    }),
+  )
 })
 
 test('remixing a shared poster loads it into the editor and goes there', () => {

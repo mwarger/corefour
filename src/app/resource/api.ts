@@ -2,9 +2,9 @@ import { Data, Duration, Effect, Schema } from 'effect'
 import { HttpApiClient } from 'effect/unstable/httpapi'
 import { Http } from 'foldkit'
 
-import { CoreFourApi, GridId } from '../../shared/api'
+import { CoreFourApi } from '../../shared/api'
 import type { CategoryId } from '../../shared/catalog'
-import type { ShareRequest } from '../../shared/schema'
+import { GridId, type ShareRequest } from '../../shared/schema'
 
 const REQUEST_TIMEOUT = Duration.seconds(20)
 

@@ -5,9 +5,11 @@ import { modifyFields } from 'foldkit/struct'
 import { toString as urlToString } from 'foldkit/url'
 
 import type { Grid } from '../shared/schema'
+import * as Poster from './domain/poster'
 import { Message } from './message'
 import { Model } from './model'
 import { Editor, Shared } from './page'
+import { loadDraft } from './resource/draftStorage'
 import { AppRoute, editorRouter, urlToAppRoute } from './route'
 
 type UpdateReturn = Update.Return<Model, Message>
@@ -24,6 +26,17 @@ const LoadExternal = Command.define('LoadExternal', {
   messages: [Message.CompletedLoadExternal],
   execute: ({ href }) =>
     load(href).pipe(Effect.as(Message.CompletedLoadExternal())),
+})
+
+/**
+ * Reads the saved draft after a server-rendered boot, whose Flags carry no
+ * draft because only the browser can see localStorage.
+ */
+export const RestoreDraft = Command.define('RestoreDraft', {
+  messages: [Message.CompletedRestoreDraft],
+  execute: loadDraft.pipe(
+    Effect.map(maybeDraft => Message.CompletedRestoreDraft({ maybeDraft })),
+  ),
 })
 
 const readEditor = (model: Model) => Option.some(model.editor)
@@ -115,6 +128,15 @@ export const update = (model: Model, message: Message) =>
 
     CompletedNavigateInternal: () => ({ model }),
     CompletedLoadExternal: () => ({ model }),
+
+    CompletedRestoreDraft: ({ maybeDraft }) =>
+      Option.match(maybeDraft, {
+        onNone: () => ({ model }),
+        onSome: draft =>
+          Poster.isEmpty(model.editor.grid)
+            ? { model: writeEditor(model, Editor.init(draft)) }
+            : { model },
+      }),
 
     GotEditorMessage: ({ message }) => foldEditor(model, message),
     GotSharedMessage: ({ message }) => foldShared(model, message),
