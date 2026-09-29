@@ -15,8 +15,9 @@ subtree_prompted: true
 - **API:** `src/shared/api.ts` is the single definition of the Worker API. The Worker implements it in `src/worker/api.ts` (`HttpApiBuilder`); the client calls it through `HttpApiClient` in `src/app/resource/api.ts`. Change the definition, not either side alone.
 - **SSR:** only `/g/:id` is server-rendered. The Worker imports `src/app/entry.server.ts` through the `#app/entry.server` Vite alias, typed by `src/shared/ssr.ts` (the Worker's tsconfig has no DOM types, so it must not import app code directly). App modules the Worker imports must not touch `document` or `window` at module level. `vite.config.ts` gives the client and Worker builds one `FOLDKIT_BUILD_ID`; hydration refuses mismatches.
 - **Layout:** Foldkit client in `src/app`, Cloudflare Worker (Effect `HttpApi`/`HttpRouter`) in `src/worker`, code shared by both in `src/shared`.
-- **Infrastructure:** Alchemy v2, `alchemy.run.ts` (stack `CoreFour`). `pnpm dev` runs `alchemy dev`; `pnpm run deploy` deploys the `prod` stage using `.env.prod` (never `pnpm deploy`, which is a pnpm builtin). Always confirm with the user before deploying.
+- **Infrastructure:** Alchemy v2, `alchemy.run.ts` (stack `CoreFour`). `bun run dev` runs `alchemy dev`; `bun run deploy` deploys the `prod` stage using `.env.prod`. Always confirm with the user before deploying.
 - **Secrets:** `.env` (local dev, Turnstile test secret) and `.env.prod` (production). Both gitignored; see `.env.example`.
-- **Versions:** `effect` is pinned to exactly `4.0.0-rc.116` because `foldkit@0.163.0` requires it (alchemy accepts it). Upgrade them together.
+- **Versions:** `effect` is pinned to exactly `4.0.0-rc.116` because `foldkit@0.163.0` requires it (alchemy accepts it). Upgrade them together, along with the `@effect/*` versions and `overrides` in `package.json`.
 - **Vendored source:** `repos/foldkit` is a read-only `git subtree` of the installed Foldkit version; update it with `git subtree pull` after upgrading.
-- **Checks:** `pnpm check` runs typecheck (separate app/worker tsconfigs) and Vitest.
+- **Checks:** `bun run check` runs typecheck (separate app/worker tsconfigs), lint, and Vitest.
+- **Package manager and runtime:** Bun. `bunfig.toml` runs scripts on Bun's runtime. `package.json` `overrides` pin the transitive `@effect/*` packages to the same release candidate as `effect`; Bun otherwise resolves their `^` ranges to newer RCs that need a newer `effect` (`bun pm ls` or a scan of `node_modules` shows drift).

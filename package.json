@@ -8,7 +8,7 @@
     "deploy": "alchemy deploy --stage prod --env-file .env.prod",
     "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.worker.json",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "check": "bun run typecheck && bun run lint && bun run test",
     "lint": "oxlint src/app",
     "format": "oxfmt"
   },
@@ -44,5 +44,14 @@
     "modern-screenshot": "^4.7.0",
     "react": "^19.3.0"
   },
-  "packageManager": "pnpm@12.5.1"
+  "packageManager": "bun@1.3.14",
+  "overrides": {
+    "@effect/platform-node-shared": "4.0.0-rc.116",
+    "@effect/sql-d1": "4.0.0-rc.116",
+    "@effect/sql-sqlite-do": "4.0.0-rc.116",
+    "@effect/vitest": "4.0.0-rc.116"
+  },
+  "trustedDependencies": [
+    "workerd"
+  ]
 }

@@ -59,25 +59,25 @@ repos/foldkit/  vendored Foldkit source, for reference only (git subtree)
 
 ## Running it locally
 
-You'll need Node 22+, pnpm, a Cloudflare account, and a [Twitch developer app](https://dev.twitch.tv/console/apps) for IGDB access.
+You'll need [Bun](https://bun.sh), a Cloudflare account, and a [Twitch developer app](https://dev.twitch.tv/console/apps) for IGDB access.
 
 ```sh
-pnpm install
+bun install
 cp .env.example .env              # add your IGDB client ID and secret
-pnpm exec alchemy profile edit    # connect your Cloudflare account
-pnpm dev                          # http://localhost:1337
+bunx alchemy profile edit    # connect your Cloudflare account
+bun run dev                  # http://localhost:1337
 ```
 
 `.env.example` already has Cloudflare's always-pass Turnstile test secret, and the client uses the matching test site key in dev.
 
-`pnpm check` runs the typecheck, lint, and tests.
+`bun run check` runs the typecheck, lint, and tests.
 
 ## Deploying
 
 Production reads `.env.prod`, which holds the same keys as `.env` plus a real Turnstile secret. If you deploy your own copy, create a Turnstile widget and put its site key in `src/app/resource/turnstile.ts`.
 
 ```sh
-pnpm run deploy    # not `pnpm deploy`, which is a pnpm builtin
+bun run deploy
 ```
 
 This deploys the `prod` stage, which is served at `corefour.<your-subdomain>.workers.dev`.

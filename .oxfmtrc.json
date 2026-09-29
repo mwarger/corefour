@@ -23,6 +23,6 @@
     "dist",
     "repos",
     "*.tsbuildinfo",
-    "pnpm-lock.yaml"
+    "bun.lock"
   ]
 }

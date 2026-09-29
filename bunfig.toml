@@ -1,0 +1,4 @@
+# Run package scripts and their CLIs (alchemy, vite, vitest, tsc) on Bun's
+# runtime instead of the Node their shebangs name.
+[run]
+bun = true
