@@ -7,12 +7,14 @@
 		"deploy": "alchemy deploy --stage prod --env-file .env.prod",
 		"typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.worker.json",
 		"test": "vitest run",
-		"check": "pnpm typecheck && pnpm test"
+		"check": "pnpm typecheck && pnpm lint && pnpm test",
+		"lint": "oxlint src/app"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^5.20260927.1",
 		"@foldkit/devtools": "0.163.0",
 		"@foldkit/devtools-mcp": "0.22.0",
+		"@foldkit/oxlint-plugin": "0.15.0",
 		"@foldkit/vite-plugin": "0.24.0",
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/node": "^26.6.3",
@@ -20,6 +22,7 @@
 		"@types/react-dom": "^19.3.0",
 		"@vitejs/plugin-react": "^6.1.1",
 		"happy-dom": "^20.14.5",
+		"oxlint": "^1.85.0",
 		"tailwindcss": "^4.3.3",
 		"typescript": "^7.0.2",
 		"vite": "^8.3.0",
