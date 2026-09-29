@@ -1,27 +1,4 @@
 {
-	"compilerOptions": {
-		"target": "es2024",
-		"lib": [
-			"es2024",
-			"DOM",
-			"DOM.Iterable"
-		],
-		"module": "preserve",
-		"moduleResolution": "bundler",
-		"types": [],
-		"strict": true,
-		"noEmit": true,
-		"allowImportingTsExtensions": true,
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"skipLibCheck": true,
-		"jsx": "react-jsx"
-	},
-	"include": [
-		"src",
-		"test",
-		"cloudflare.config.ts",
-		".cloudflare/types",
-		"vitest.config.ts"
-	]
+	"files": [],
+	"references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.worker.json" }]
 }

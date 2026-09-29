@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { emptyGrid, normalizeGrid } from "../shared/draft.ts";
 import type { Grid, Item } from "../shared/types.ts";
 
-export const STORAGE_KEY = "my9:draft";
+export const STORAGE_KEY = "corefour:draft";
 
 function loadDraft(): Grid {
 	try {
