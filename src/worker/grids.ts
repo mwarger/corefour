@@ -3,6 +3,7 @@ import { Array, Option, Schema, pipe } from 'effect'
 
 import { Grid, GridJson, type ShareRequest } from '../shared/schema.ts'
 import { GRID_ID_PATTERN, gridId } from './ids.ts'
+import { upgradeLegacyGrid } from './legacy.ts'
 import { SOURCES } from './sources/index.ts'
 
 /** Thrown when an item reference doesn't resolve in its source database. */
@@ -58,19 +59,18 @@ export const saveGrid = async (grid: Grid): Promise<string> => {
   return id
 }
 
-/** The stored JSON for a grid, if it exists and still decodes. */
-export const loadGridJson = async (
-  id: string,
-): Promise<Option.Option<string>> => {
+export const loadGrid = async (id: string): Promise<Option.Option<Grid>> => {
   if (!GRID_ID_PATTERN.test(id)) {
     return Option.none()
   }
   const stored = await env.KV.get(`grid:${id}`, { cacheTtl: 86_400 })
   return pipe(
     Option.fromNullishOr(stored),
-    Option.filter(json => Option.isSome(decodeGrid(json))),
+    Option.flatMap(json => decodeGrid(upgradeLegacyGrid(json))),
   )
 }
 
-export const loadGrid = async (id: string): Promise<Option.Option<Grid>> =>
-  Option.flatMap(await loadGridJson(id), decodeGrid)
+/** A stored grid as canonical JSON, if it exists and decodes. */
+export const loadGridJson = async (
+  id: string,
+): Promise<Option.Option<string>> => Option.map(await loadGrid(id), encodeGrid)
