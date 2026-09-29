@@ -17,10 +17,10 @@ export class DownloadError extends Data.TaggedError('DownloadError')<{
 
 // NOTE: the DOM-to-image library needs the live poster element, and saving a
 // generated file is done with a download link, so this reaches into the DOM.
-export const downloadPosterPng = (elementId: string, filename: string) =>
+export const downloadPosterPng = (filename: string) =>
   Effect.gen(function* () {
     const element = yield* Option.match(
-      Option.fromNullishOr(document.getElementById(elementId)),
+      Option.fromNullishOr(document.getElementById(POSTER_ELEMENT_ID)),
       {
         onNone: () =>
           Effect.fail(new DownloadError({ message: 'Poster not found.' })),

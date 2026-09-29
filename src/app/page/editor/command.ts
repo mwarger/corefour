@@ -1,19 +1,18 @@
-import { Array, Duration, Effect, Option, Schema, pipe } from 'effect'
+import { Duration, Effect, Option, Schema, pipe } from 'effect'
 import { Command, Dom } from 'foldkit'
 
-import { Grid, ShareRequest } from '../../../shared/schema'
+import { Grid } from '../../../shared/schema'
+import * as Poster from '../../domain/poster'
 import { ApiError, shareGrid } from '../../resource/api'
 import { saveDraft } from '../../resource/draftStorage'
 import { getTurnstileToken } from '../../resource/turnstile'
 import { sharedRouter } from '../../route'
+import { slotButtonId } from './constant'
 import { Message } from './message'
 
 const LONG_PRESS = Duration.millis(250)
 
 const INVALID_POSTER = "This poster can't be shared. Try starting over."
-
-export const slotButtonId = (slotIndex: number): string =>
-  `slot-button-${slotIndex}`
 
 export const SaveDraft = Command.define('SaveDraft', {
   args: { grid: Grid },
@@ -25,25 +24,19 @@ export const SaveDraft = Command.define('SaveDraft', {
     ),
 })
 
-const shareRequestFor = (grid: Grid, turnstileToken: string) =>
-  ShareRequest.makeEffect({
-    category: grid.category,
-    subtitle: grid.subtitle,
-    theme: grid.theme,
-    items: Array.map(
-      grid.items,
-      Option.map(({ source, id }) => ({ source, id })),
-    ),
-    turnstileToken,
-  }).pipe(Effect.mapError(() => new ApiError({ message: INVALID_POSTER })))
-
 export const ShareGrid = Command.define('ShareGrid', {
   args: { grid: Grid, generation: Schema.Number },
   messages: [Message.SucceededShareGrid, Message.FailedShareGrid],
   execute: ({ grid, generation }) =>
     Effect.gen(function* () {
       const turnstileToken = yield* getTurnstileToken
-      const request = yield* shareRequestFor(grid, turnstileToken)
+      const request = yield* Option.match(
+        Poster.toShareRequest(grid, turnstileToken),
+        {
+          onNone: () => Effect.fail(new ApiError({ message: INVALID_POSTER })),
+          onSome: Effect.succeed,
+        },
+      )
       const id = yield* shareGrid(request)
       const url = new URL(sharedRouter({ id }), window.location.origin).href
       return Message.SucceededShareGrid({ generation, url })

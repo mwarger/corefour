@@ -115,9 +115,13 @@ export const errorNoticeView = <Message>(
  * A page that is only a heading in the poster frame (loading, not found,
  * failed), optionally followed by a link back to the editor.
  */
+type MessagePageConfig = Readonly<{
+  heading: string
+  isLinkingToEditor: boolean
+}>
+
 export const messagePageView = <Message>(
-  heading: string,
-  isLinkingToEditor: boolean,
+  { heading, isLinkingToEditor }: MessagePageConfig,
   h: HtmlBuilder<Message>,
 ): Html =>
   pageView(

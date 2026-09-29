@@ -28,7 +28,7 @@ const isCurrentPoster = (model: Model, gridId: string): boolean =>
 
 /** Whether the page already shows (or is loading) this poster. */
 export const isShowing = (model: Model, gridId: string): boolean =>
-  Option.contains(model.maybeGridId, gridId) && !AsyncData.isFailure(model.grid)
+  isCurrentPoster(model, gridId) && !AsyncData.isFailure(model.grid)
 
 const foldPosterDownload = Update.foldChild({
   update: PosterDownload.update,

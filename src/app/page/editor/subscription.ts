@@ -1,11 +1,9 @@
 import { Array, Effect, Number, Option, Schema, Stream, pipe } from 'effect'
 import { Subscription } from 'foldkit'
 
+import { SLOT_INDEX_ATTRIBUTE } from './constant'
 import { Message } from './message'
 import { Drag, type Model } from './model'
-
-/** Data attribute carrying a slot's index, used to find the slot under the pointer. */
-export const SLOT_INDEX_ATTRIBUTE = 'slot-index'
 
 // NOTE: the dragged tile has `pointer-events: none`, so hit-testing sees the
 // slot beneath it and the browser's post-drop click never reaches the tile.

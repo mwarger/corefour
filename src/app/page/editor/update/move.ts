@@ -3,10 +3,10 @@ import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import * as Poster from '../../../domain/poster'
-import { FocusSlot } from '../command'
 import type { Message } from '../message'
 import type { Model } from '../model'
 import { editGrid } from './editGrid'
+import { focusSlot } from './focusSlot'
 import type { UpdateReturn } from './update'
 
 const announceMove =
@@ -35,9 +35,6 @@ export const handlePressedMoveKey =
               ({ name }) => `Moved ${name} to position ${targetIndex + 1}`,
             ),
           ),
-          stepModel => ({
-            model: stepModel,
-            commands: [FocusSlot({ slotIndex: targetIndex })],
-          }),
+          focusSlot(targetIndex),
         ]),
     })

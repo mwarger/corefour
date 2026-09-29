@@ -61,6 +61,7 @@ describe('picker', () => {
       resolveDialogResources,
       expect(text('1998 · N64, Wii, 3DS, WiiU +2')).toExist(),
       expect(text('2011 · Remake · 3DS')).toExist(),
+      expect(role('status')).toHaveText('2 results'),
     )
   })
 

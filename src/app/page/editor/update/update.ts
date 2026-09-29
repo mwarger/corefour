@@ -16,6 +16,7 @@ import {
   handleReleasedPointer,
 } from './drag'
 import { editGrid } from './editGrid'
+import { focusSlot } from './focusSlot'
 import { handlePressedMoveKey } from './move'
 import {
   handleClickedShareLink,
@@ -36,10 +37,15 @@ const toGotPickerMessage = (message: Picker.Message): Message =>
 const foldPickerOutMessage = Picker.OutMessage.match<
   Update.Step<Model, Message>
 >({
-  SelectedResult: ({ slotIndex, result }) =>
-    editGrid(
-      Poster.setItem(slotIndex, Option.some(itemFromSearchResult(result))),
-    ),
+  SelectedResult:
+    ({ slotIndex, result }) =>
+    model =>
+      Update.combine(model, [
+        editGrid(
+          Poster.setItem(slotIndex, Option.some(itemFromSearchResult(result))),
+        ),
+        focusSlot(slotIndex),
+      ]),
 })
 
 const foldPicker = Update.foldChild({
@@ -75,7 +81,10 @@ export const update = (model: Model, message: Message) =>
       openPicker({ slotIndex, category: model.grid.category })(model),
 
     ClickedRemoveItem: ({ slotIndex }) =>
-      editGrid(Poster.setItem(slotIndex, Option.none()))(model),
+      Update.combine(model, [
+        editGrid(Poster.setItem(slotIndex, Option.none())),
+        focusSlot(slotIndex),
+      ]),
 
     ClickedStartOver: () => editGrid(Poster.empty)(model),
 

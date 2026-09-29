@@ -12,10 +12,11 @@ import {
   posterFrameView,
 } from '../../../view/layout'
 import { posterView } from '../../../view/poster'
+import { MOVE_HINT_ID } from '../constant'
 import { Message } from '../message'
 import { type Clipboard, Model, ShareState } from '../model'
 import * as Picker from '../picker'
-import { MOVE_HINT_ID, slotView, subtitlePickerView } from './slot'
+import { slotView, subtitlePickerView } from './slot'
 
 const clipboardLabel = (clipboard: Clipboard): string =>
   Match.value(clipboard).pipe(

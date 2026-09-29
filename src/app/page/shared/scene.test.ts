@@ -19,7 +19,7 @@ test('a loaded poster is read-only with remix and download actions', () => {
     expect(role('button', { name: `Change ${zelda.name}` })).toBeAbsent(),
     expect(role('button', { name: 'Remix' })).toExist(),
     expect(role('button', { name: 'Download PNG' })).toExist(),
-    expect(role('link', { name: '← Make your own' })).toHaveAttr('href', '/'),
+    expect(role('link', { name: 'Make your own' })).toHaveAttr('href', '/'),
   )
 })
 

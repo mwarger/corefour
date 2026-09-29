@@ -13,18 +13,15 @@ import {
   filledTileView,
   subtitleText,
 } from '../../../view/poster'
-import { slotButtonId } from '../command'
+import { MOVE_HINT_ID, SLOT_INDEX_ATTRIBUTE, slotButtonId } from '../constant'
 import { Message } from '../message'
 import { Drag, type Model, type Pointer } from '../model'
-import { SLOT_INDEX_ATTRIBUTE } from '../subscription'
 
 const PRIMARY_MOUSE_BUTTON = 0
 
-export const MOVE_HINT_ID = 'slot-move-hint'
-
 const TARGET_RING_CLASS = 'ring-[0.9cqw] ring-amber-400 ring-offset-2'
 
-const MOVE_KEYS: Readonly<globalThis.Record<string, Poster.MoveDirection>> = {
+const MOVE_KEYS: Record.ReadonlyRecord<string, Poster.MoveDirection> = {
   ArrowUp: 'Up',
   ArrowDown: 'Down',
   ArrowLeft: 'Left',

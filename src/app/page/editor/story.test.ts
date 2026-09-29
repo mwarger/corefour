@@ -65,7 +65,9 @@ describe('picking a game', () => {
           grid: Poster.setItem(2, Option.some(zelda))(Poster.empty()),
         }),
       ),
+      Command.expectHas(FocusSlot({ slotIndex: 2 })),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+      Command.resolve(FocusSlot, Message.CompletedFocusSlot()),
       Command.resolve(
         Dialog.CloseDialog,
         Dialog.Message.CompletedCloseDialog(),
@@ -81,7 +83,9 @@ describe('picking a game', () => {
       model(({ grid }) => {
         expect(itemNames(grid)).toEqual([null, 'Crazy Taxi', null, null])
       }),
+      Command.expectHas(FocusSlot({ slotIndex: 0 })),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+      Command.resolve(FocusSlot, Message.CompletedFocusSlot()),
     )
   })
 
@@ -398,6 +402,7 @@ describe('sharing', () => {
       given(sharingFirstVersion),
       message(Message.ClickedRemoveItem({ slotIndex: 1 })),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+      Command.resolve(FocusSlot, Message.CompletedFocusSlot()),
       message(
         Message.FailedShareGrid({ generation: 1, error: 'Sharing failed.' }),
       ),

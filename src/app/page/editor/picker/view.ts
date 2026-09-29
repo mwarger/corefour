@@ -35,23 +35,52 @@ const resultDetails = ({
   )
 }
 
-const statusView = (
-  text: string,
-  isError: boolean,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.p(
+const searchErrorView = (error: string, h: HtmlBuilder<Message>): Html =>
+  h.p([h.Role('alert'), h.Class('p-4 text-center text-red-700')], [error])
+
+const resultCountText = (count: number): string =>
+  count === 1 ? '1 result' : `${count} results`
+
+/** What the always-mounted status region says, and whether to show it. */
+const searchStatus = (
+  model: Model,
+): Readonly<{ text: string; isVisible: boolean }> =>
+  AsyncData.match(model.results, {
+    onIdle: () => ({ text: '', isVisible: false }),
+    onLoading: () => ({ text: 'Searching…', isVisible: true }),
+    onRefreshing: () => ({ text: 'Searching…', isVisible: false }),
+    onFailure: () => ({ text: '', isVisible: false }),
+    onStale: ({ data }) => ({
+      text: resultCountText(data.length),
+      isVisible: false,
+    }),
+    onSuccess: results =>
+      Array.match(results, {
+        onEmpty: () => ({ text: 'Nothing found.', isVisible: true }),
+        onNonEmpty: nonEmptyResults => ({
+          text: resultCountText(nonEmptyResults.length),
+          isVisible: false,
+        }),
+      }),
+  })
+
+// NOTE: the status region stays mounted so screen readers announce each
+// change; "N results" is announced but only shown by the list itself.
+const searchStatusView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const { text, isVisible } = searchStatus(model)
+  return h.p(
     [
-      h.Role(isError ? 'alert' : 'status'),
+      h.Role('status'),
       h.Class(
-        clsx('p-4 text-center', {
-          'text-red-700': isError,
-          'text-ink/60': !isError,
+        clsx({
+          'p-4 text-center text-ink/60': isVisible,
+          'sr-only': !isVisible,
         }),
       ),
     ],
     [text],
   )
+}
 
 const resultItemView = (result: SearchResult, h: HtmlBuilder<Message>): Html =>
   h.keyed('li')(
@@ -99,34 +128,30 @@ const resultItemView = (result: SearchResult, h: HtmlBuilder<Message>): Html =>
 
 const resultListView = (
   results: ReadonlyArray<SearchResult>,
+  isBusy: boolean,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.ul(
-    [h.Class('p-2')],
+    [h.AriaBusy(isBusy), h.Class('p-2')],
     Array.map(results, result => resultItemView(result, h)),
   )
-
-const staleResultsView = (
-  error: string,
-  results: ReadonlyArray<SearchResult>,
-  h: HtmlBuilder<Message>,
-): Html => h.div([], [statusView(error, true, h), resultListView(results, h)])
 
 const resultsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('overflow-y-auto')],
     [
+      searchStatusView(model, h),
       AsyncData.match(model.results, {
         onIdle: () => h.empty,
-        onLoading: () => statusView('Searching…', false, h),
-        onRefreshing: results => resultListView(results, h),
-        onFailure: error => statusView(error, true, h),
-        onStale: ({ error, data }) => staleResultsView(error, data, h),
-        onSuccess: results =>
-          Array.match(results, {
-            onEmpty: () => statusView('Nothing found.', false, h),
-            onNonEmpty: nonEmptyResults => resultListView(nonEmptyResults, h),
-          }),
+        onLoading: () => h.empty,
+        onRefreshing: results => resultListView(results, true, h),
+        onFailure: error => searchErrorView(error, h),
+        onStale: ({ error, data }) =>
+          h.div(
+            [],
+            [searchErrorView(error, h), resultListView(data, false, h)],
+          ),
+        onSuccess: results => resultListView(results, false, h),
       }),
     ],
   )
@@ -154,7 +179,7 @@ const searchFormView = (
               h.AriaLabel(prompt),
               h.Autocomplete('off'),
               h.Class(
-                'w-full rounded-lg bg-white px-4 py-3 text-base text-ink outline-none ring-ink/20 focus:ring-2',
+                'w-full rounded-lg bg-white px-4 py-3 text-base text-ink ring-amber-400 outline-none focus-visible:ring-2',
               ),
             ]),
         },

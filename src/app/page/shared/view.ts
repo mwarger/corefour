@@ -24,7 +24,7 @@ import { type LoadError, Model } from './model'
 const makeYourOwnLinkView = (h: HtmlBuilder<Message>): Html =>
   h.a(
     [h.Href(editorRouter()), h.Class('mr-auto font-semibold hover:underline')],
-    ['← Make your own'],
+    [h.span([h.AriaHidden(true)], ['← ']), 'Make your own'],
   )
 
 const loadErrorHeading = (error: LoadError): string =>
@@ -86,8 +86,16 @@ const loadedView = (model: Model, grid: Grid, h: HtmlBuilder<Message>): Html =>
 
 export const view = Submodel.defineView<Model, Message>((model, h) =>
   AsyncData.matchData(model.grid, {
-    onEmpty: () => messagePageView('Loading poster…', false, h),
-    onFailure: error => messagePageView(loadErrorHeading(error), true, h),
+    onEmpty: () =>
+      messagePageView(
+        { heading: 'Loading poster…', isLinkingToEditor: false },
+        h,
+      ),
+    onFailure: error =>
+      messagePageView(
+        { heading: loadErrorHeading(error), isLinkingToEditor: true },
+        h,
+      ),
     onData: grid => loadedView(model, grid, h),
   }),
 )

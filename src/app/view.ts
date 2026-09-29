@@ -33,6 +33,9 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         toParentMessage: message => Message.GotSharedMessage({ message }),
       }),
     NotFound: ({ path }) =>
-      messagePageView(`There's nothing at ${path}.`, true, h),
+      messagePageView(
+        { heading: `There's nothing at ${path}.`, isLinkingToEditor: true },
+        h,
+      ),
   }),
 })

@@ -7,7 +7,7 @@ import {
   DEFAULT_THEME,
   defaultSubtitleId,
 } from '../../shared/catalog'
-import { GRID_SIZE, Grid, type Item } from '../../shared/schema'
+import { GRID_SIZE, Grid, type Item, ShareRequest } from '../../shared/schema'
 
 const COLUMN_COUNT = 2
 
@@ -79,3 +79,19 @@ export const neighborIndex = (
 /** The file name a downloaded poster is saved as, e.g. `my-core-four.png`. */
 export const posterFilename = (grid: Grid): string =>
   `${pipe(CATEGORIES[grid.category].title, String.toLowerCase, String.replaceAll(' ', '-'))}.png`
+
+/** The references a share sends; `None` if the poster breaks a share rule. */
+export const toShareRequest = (
+  grid: Grid,
+  turnstileToken: string,
+): Option.Option<ShareRequest> =>
+  ShareRequest.makeOption({
+    category: grid.category,
+    subtitle: grid.subtitle,
+    theme: grid.theme,
+    items: Array.map(
+      grid.items,
+      Option.map(({ source, id }) => ({ source, id })),
+    ),
+    turnstileToken,
+  })

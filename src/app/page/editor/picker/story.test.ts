@@ -131,19 +131,18 @@ test('pressing Enter picks the first result for the slot being edited', () => {
   )
 })
 
+// NOTE: starts mid-refresh, since stories resolve the debounce and search
+// Commands before the next Message can be sent.
 test('pressing Enter before the new results arrive does not pick an old result', () => {
   story(
     update,
-    given(withResults('ma', [zeldaResult])),
-    message(Message.UpdatedQuery({ value: 'mario kart' })),
-    Command.resolve(
-      WaitBeforeSearch,
-      Message.CompletedWaitBeforeSearch({ generation: 0 }),
+    given(
+      modifyFields(withResults('ma', [zeldaResult]), {
+        query: () => 'mario kart',
+        results: () => SearchResultsData.Refreshing({ data: [zeldaResult] }),
+      }),
     ),
     message(Message.SubmittedSearch()),
-    model(({ results }) => {
-      expect(results._tag).toBe('Refreshing')
-    }),
     Command.expectNone(),
   )
 })

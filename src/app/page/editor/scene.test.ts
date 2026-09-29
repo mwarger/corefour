@@ -80,6 +80,7 @@ describe('editor', () => {
       ),
       Mount.expectEnded(Dialog.AcquireResources),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+      Command.resolve(FocusSlot, Message.CompletedFocusSlot()),
       expect(role('button', { name: `Change ${zelda.name}` })).toExist(),
       expect(text('1 / 4 picked')).toExist(),
     )
@@ -91,6 +92,7 @@ describe('editor', () => {
       given(init(twoItemGrid)),
       click(role('button', { name: `Remove ${zelda.name}` })),
       Command.resolve(SaveDraft, Message.CompletedSaveDraft()),
+      Command.resolve(FocusSlot, Message.CompletedFocusSlot()),
       expect(role('button', { name: `Change ${zelda.name}` })).toBeAbsent(),
       expect(text('1 / 4 picked')).toExist(),
     )
