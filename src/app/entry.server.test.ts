@@ -1,5 +1,10 @@
 import { Effect } from 'effect'
-import { beforeAll, expect, test, vi } from 'vitest'
+import { expect, test, vi } from 'vitest'
+
+// NOTE: the entry reads the build id when it loads, so it's set before imports.
+vi.hoisted(() => {
+  vi.stubEnv('FOLDKIT_BUILD_ID', 'test-build')
+})
 
 import { renderSharedPage } from './entry.server'
 import { crazyTaxi, twoItemGrid, zelda } from './fixture'
@@ -21,10 +26,6 @@ const render = () =>
       poster: { id: 'abc1234567', grid: twoItemGrid },
     }),
   )
-
-beforeAll(() => {
-  vi.stubEnv('FOLDKIT_BUILD_ID', 'test-build')
-})
 
 test('a shared poster renders to hydratable HTML with its games in the markup', async () => {
   const html = await render()

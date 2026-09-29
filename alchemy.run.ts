@@ -21,6 +21,10 @@ export const Kv = Cloudflare.KV.Namespace('Kv').pipe(
 // Pre-rendered link-preview images (derived from Kv, safe to rebuild).
 export const OgImages = Cloudflare.R2.Bucket('OgImages')
 
+// Server-rendered shared-poster pages, one per deployment and poster (derived
+// from Kv and the client build, safe to rebuild).
+export const RenderedPages = Cloudflare.R2.Bucket('RenderedPages')
+
 export const ShareLimiter = Cloudflare.RateLimit('ShareLimiter', {
   namespaceId: 1001,
   simple: { limit: 10, period: 60 },
@@ -46,6 +50,7 @@ export const Website = Cloudflare.Website.Foldkit(
     env: {
       KV: Kv,
       OG_IMAGES: OgImages,
+      RENDERED_PAGES: RenderedPages,
       SHARE_LIMITER: ShareLimiter,
       IGDB_CLIENT_ID: Config.Redacted('IGDB_CLIENT_ID'),
       IGDB_CLIENT_SECRET: Config.Redacted('IGDB_CLIENT_SECRET'),

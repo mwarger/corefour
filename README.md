@@ -37,7 +37,7 @@ It runs entirely on Cloudflare's free tier. It is also a demo of an all-Effect s
 - `/api/search`: IGDB search through a Twitch app token (cached in KV). Results are ranked and cached with the Cache API.
 - `/api/img/...`: a same-origin cover proxy, so exporting the poster to PNG doesn't taint the canvas. It only fetches from each source's own image host.
 - `POST /api/grids`: rate-limited and Turnstile-verified. It resolves item IDs against IGDB and stores the poster in KV under a content-addressed ID, so sharing the same poster twice gives the same link.
-- `/g/:id`: the server-rendered poster page, with Open Graph tags added by `HTMLRewriter`. If rendering fails, it falls back to the plain app page.
+- `/g/:id`: the server-rendered poster page, with Open Graph tags added by `HTMLRewriter`. Each deployment renders a poster's page once and keeps it in R2, since posters never change. If rendering fails, it falls back to the plain app page.
 - `/api/docs`: an interactive API reference (Scalar) generated from the same definition, with the OpenAPI document at `/api/openapi.json`.
 - `/api/og/:id.png`: a 1200×630 link preview rendered with satori and resvg, pre-rendered to R2 when the poster is shared. The layout is tuned to fit the Free plan's CPU limit; see `src/worker/ogLayout.tsx`.
 

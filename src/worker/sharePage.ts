@@ -8,10 +8,11 @@ import {
 
 import { CATEGORIES, findSubtitle } from '../shared/catalog.ts'
 import type { Grid } from '../shared/schema.ts'
+import { runAfterResponse } from './execution.ts'
 import { loadGrid } from './grids.ts'
 import { ogImagePath } from './og.tsx'
 
-import { renderSharedPage } from '#app/entry.server'
+import { buildId, isDevelopment, renderSharedPage } from '#app/entry.server'
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`)
@@ -64,25 +65,64 @@ const withPreviewTags = (
 /** Must match what static assets send for index.html, which it replaces. */
 const PAGE_CACHE_CONTROL = 'public, max-age=0, must-revalidate'
 
+// NOTE: a page is cached per deployment because it embeds that build's id
+// and asset URLs. Posters never change, so nothing else invalidates it. The
+// dev server changes code without a new build id, so it always renders.
+const pageKey = (id: string) => `pages/${buildId}/${id}.html`
+
+/** This poster's page as this deployment already rendered it. */
+const loadRenderedPage = (id: string) =>
+  isDevelopment
+    ? Effect.succeedNone
+    : Effect.promise(async () => {
+        const stored = await env.RENDERED_PAGES.get(pageKey(id))
+        return stored === null
+          ? Option.none<string>()
+          : Option.some(await stored.text())
+      })
+
+const storeRenderedPage = (id: string, html: string) =>
+  isDevelopment
+    ? Effect.void
+    : runAfterResponse(
+        Effect.promise(() =>
+          env.RENDERED_PAGES.put(pageKey(id), html, {
+            httpMetadata: { contentType: 'text/html; charset=utf-8' },
+          }),
+        ),
+      )
+
 /**
  * The poster's page rendered by Foldkit, so it arrives complete and the
  * browser hydrates it. If rendering fails, the plain app shell still works:
- * the browser boots normally and fetches the poster itself.
+ * the browser boots normally and fetches the poster itself. Only a successful
+ * render is stored.
  */
-const renderPage = (template: string, id: string, grid: Grid, url: string) =>
-  renderSharedPage({ template, url, poster: { id, grid } }).pipe(
-    Effect.tapError(error => Effect.logError('Server render failed', error)),
-    Effect.orElseSucceed(() => template),
-    Effect.map(
-      html =>
-        new Response(html, {
-          headers: {
-            'content-type': 'text/html; charset=utf-8',
-            'cache-control': PAGE_CACHE_CONTROL,
-          },
-        }),
-    ),
-  )
+const renderPage = (id: string, grid: Grid, url: string) =>
+  Effect.gen(function* () {
+    const shell = yield* Effect.promise(() =>
+      env.ASSETS.fetch(new URL('/', url)),
+    )
+    const template = yield* Effect.promise(() => shell.text())
+
+    return yield* renderSharedPage({
+      template,
+      url,
+      poster: { id, grid },
+    }).pipe(
+      Effect.tap(html => storeRenderedPage(id, html)),
+      Effect.tapError(error => Effect.logError('Server render failed', error)),
+      Effect.orElseSucceed(() => template),
+    )
+  })
+
+const htmlResponse = (html: string) =>
+  new Response(html, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': PAGE_CACHE_CONTROL,
+    },
+  })
 
 /**
  * Shared posters are server-rendered and carry Open Graph tags, so links
@@ -96,21 +136,21 @@ export const SharePageLive = HttpRouter.add(
     const { id = '' } = yield* HttpRouter.params
     const pageUrl = request.originalUrl
 
-    const [shell, maybeGrid] = yield* Effect.all(
-      [
-        Effect.promise(() => env.ASSETS.fetch(new URL('/', pageUrl))),
-        loadGrid(id),
-      ],
-      { concurrency: 'unbounded' },
-    )
+    const maybeGrid = yield* loadGrid(id)
     if (Option.isNone(maybeGrid)) {
-      return HttpServerResponse.fromWeb(shell)
+      return HttpServerResponse.fromWeb(
+        yield* Effect.promise(() => env.ASSETS.fetch(new URL('/', pageUrl))),
+      )
     }
+    const grid = maybeGrid.value
 
-    const template = yield* Effect.promise(() => shell.text())
-    const page = yield* renderPage(template, id, maybeGrid.value, pageUrl)
+    const maybeRenderedPage = yield* loadRenderedPage(id)
+    const html = Option.isSome(maybeRenderedPage)
+      ? maybeRenderedPage.value
+      : yield* renderPage(id, grid, pageUrl)
+
     return HttpServerResponse.fromWeb(
-      withPreviewTags(page, id, maybeGrid.value, pageUrl),
+      withPreviewTags(htmlResponse(html), id, grid, pageUrl),
     )
   }),
 )

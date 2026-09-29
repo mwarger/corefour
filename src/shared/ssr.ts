@@ -18,3 +18,12 @@ export type SharedPageRequest = Readonly<{
 export type RenderSharedPage = (
   request: SharedPageRequest,
 ) => Effect.Effect<string, Error>
+
+/** What the app's server entry gives the Worker. */
+export type AppServer = Readonly<{
+  renderSharedPage: RenderSharedPage
+  /** Stamped on every rendered page; a new deployment gets a new one. */
+  buildId: string
+  /** Under the dev server, where code changes without a new build id. */
+  isDevelopment: boolean
+}>
